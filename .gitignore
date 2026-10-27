@@ -1,0 +1,41 @@
+# This repository is public; the match data is not (AGENTS.md section 2.8). Anything committed once
+# is in the history forever -- when in doubt, add it here first. scripts/hooks/check_staged.py is
+# the second line of defence.
+
+# -- match data and anything derived from it ---------------------------------------------------
+data/
+cache/
+debug/
+*.mp4
+*.npz
+*.npy
+*.parquet
+*.pkl
+*.log
+*.gzip
+*.pl3container
+
+# -- submissions: labels for the whole match. Only the four official baselines are committed -----
+evaluation/results/*.csv
+!evaluation/results/baseline_*.csv
+evaluation/reports/
+evaluation/scoreboard.csv
+
+# -- private ground truth, should it ever land here (patterns from the official repository) -------
+*_possession_gt.csv
+*_possession_gt_meta.json
+*_possession_gt_reference.csv
+
+# Rendered documents and slides can carry plots of the match; the technical document is Markdown.
+*.pdf
+
+# -- environment and tooling --------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+.vscode/
+.DS_Store
+.claude/settings.local.json

@@ -1,0 +1,8 @@
+# Python 3.11 (see .python-version). Exact pins, transitive dependencies included, so a fresh
+# environment reproduces the submission byte for byte.
+numpy==2.2.6
+pandas==2.2.3
+python-dateutil==3.0.0
+pytz==2026.5
+six==1.17.0
+tzdata==2026.5
