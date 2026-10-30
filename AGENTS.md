@@ -46,7 +46,7 @@ Three deliverables: the CSV (`<TEAM_NAME>.csv`), a **public** code repo that reg
 6. **No cloud APIs inside the pipeline that receive match data** (no hosted LLM, no hosted vision
    API on video frames). Local models only.
 7. **Byte-identical reproducibility.** One command on a fresh environment with the data bundle must
-   regenerate the exact submitted file (verify with sha256 across two clean runs).
+   regenerate the exact submitted file (verify byte for byte with `cmp` across two clean runs).
 8. **Never commit data or anything that reconstructs it**: `data/`, video, parsed caches,
    frame-level exports, debug renders, or BAR-ATH submission CSVs. Our repo will be public.
 9. **Validate every file** with `python evaluation/validate_submission.py <file>` before it is
@@ -220,7 +220,7 @@ Treat the problem as **segmentation**, not frame classification:
 switches, (c) a structured decoder that enforces realistic durations, (d) boundary refinement.
 
 ### v0 — reproduce and scaffold (day 1)
-Reproduce the four baselines exactly; wire the scorer, validator, sha256 check and the firewall
+Reproduce the four baselines exactly; wire the scorer, validator, byte-identity check and the firewall
 wrapper; build the parsed-data cache; make the full pipeline one command.
 
 ### v1 — physics/rules + structured decoding (week 1)
@@ -273,7 +273,7 @@ and write the result in `EXPERIMENTS.md`.
 
 ```
 <our-public-repo>/
-  README.md                 install, data placement, the one command, expected sha256
+  README.md                 install, data placement, the one command, the byte-identity check
   AGENTS.md                 this file
   requirements.txt          exact pins (==); Python version stated
   games.py, evaluation/     copied unchanged from the official repo (MIT, keep the licence)
@@ -291,7 +291,7 @@ and write the result in `EXPERIMENTS.md`.
   > 5 MB and any path under those folders.
 - Determinism: fixed seeds everywhere, deterministic algorithms, CPU for the final inference if GPU
   nondeterminism appears, no time- or order-dependent behaviour. `make_submission` twice in a fresh
-  venv → same sha256.
+  venv → byte-identical files (`cmp`).
 - Data location via `MTAH_DATA_DIR` / `games.asset_paths()`; never hard-code paths.
 - The pure-Python ATD parse is slow — parse once into the cache, vectorise everything after.
 - Small, typed, tested functions. Unit tests on synthetic sequences for the decoder and the
@@ -318,14 +318,14 @@ and write the result in `EXPERIMENTS.md`.
 | Oct 29–Nov 2 | off-game harness + degradation simulator; v1 rules + HSMM decoder |
 | Nov 3–9 | v2 learned emissions, Smart Tagging fusion, ablations |
 | Nov 10–13 | robustness, boundary refinement, technical document draft |
-| **Nov 14** | **freeze**: final file, two clean-room reproductions, sha256 recorded |
+| **Nov 14** | **freeze**: final file, two clean-room reproductions, byte-identical (`cmp`) |
 | Nov 15–16 | document final, repo public and checked for data, submit (one day of buffer) |
 
 ## 11. Final checklist
 
 - [ ] `<TEAM_NAME>.csv`: 199,319 rows, frames 0…199318 in order, labels in {H, A, D, X}, no `X`
       inside graded halves, passes `validate_submission.py`
-- [ ] Fresh clone + fresh venv + data bundle + one command → identical sha256
+- [ ] Fresh clone + fresh venv + data bundle + one command → byte-identical file (`cmp`)
 - [ ] Repo public; no data, caches, debug renders or BAR-ATH predictions in it or in its history
 - [ ] Technical document covers: approach and why; assets used and dropped; every training dataset
       (source, who labelled it, how much — none from this match); possession rules implemented

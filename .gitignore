@@ -39,3 +39,6 @@ __pycache__/
 .vscode/
 .DS_Store
 .claude/settings.local.json
+
+# -- off-game datasets (other matches; public licences, but large) ------------------------------
+external/

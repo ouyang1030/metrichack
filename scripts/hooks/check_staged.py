@@ -1,9 +1,9 @@
 """Pre-commit guard: refuse to commit match data or anything that reconstructs it (AGENTS.md 2.8).
 
-Blocks, among the staged files: anything under data/, cache/ or debug/ at any depth; video,
-array and log files; submissions in evaluation/results/ other than the four official baselines;
-the scorer's reports; any file over 5 MB; and any CSV with a row per video frame that is not one
-of the vendored official files. Standard library only.
+Blocks, among the staged files: anything under data/, cache/, debug/ or external/ at any depth;
+video, array and log files; submissions in evaluation/results/ other than the four official
+baselines; the scorer's reports; any file over 5 MB; and any CSV with a row per video frame that
+is not one of the vendored official files. Standard library only.
 
 Installed by scripts/install_hooks.sh.
 """
@@ -14,7 +14,7 @@ import sys
 
 MAX_BYTES = 5 * 1024 * 1024
 FRAME_ROWS = 199319
-BLOCKED_DIRS = ("data", "cache", "debug")
+BLOCKED_DIRS = ("data", "cache", "debug", "external")
 BLOCKED_PATTERNS = ("*.mp4", "*.npz", "*.npy", "*.parquet", "*.pkl", "*.log", "*.gzip",
                     "*.pl3container", "evaluation/reports/*", "evaluation/scoreboard.csv")
 OFFICIAL_CSVS = ("evaluation/results/baseline_*.csv", "evaluation/gt/*_public.csv")

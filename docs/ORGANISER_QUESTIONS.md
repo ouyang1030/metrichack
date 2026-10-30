@@ -68,3 +68,13 @@ answers in COMPLIANCE_LOG.md.
 > 113742. On which frame is the ball struck in each half? We want to assert that our algorithmic
 > kickoff detection agrees with the published frames. A one-frame offset is free under spellF1,
 > so this is a documentation consistency question.
+
+## 6. Do touches without control ever form a spell in the ground truth? (GitHub issue)
+
+> CHALLENGE.md says possession changes only when the other team gains controlled possession: a
+> touch without control, a deflection that is not an interception, or an aerial duel won without
+> control does not change it. In the corrected tracking the ground truth comes from, can such a
+> touch still produce a short spell of the other team, e.g. a blocked pass that rebounds to the
+> passer's team? Or does the corrected tracking assign the ball to a team only once a player has
+> it under control, so that every spell in the ground truth is a controlled possession? We do not
+> want to tune on the public window, so we would rather have the rule stated than infer it.

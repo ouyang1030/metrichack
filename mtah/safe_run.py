@@ -92,6 +92,11 @@ class Report:
                        summary["short_share"], summary["dead_share"], summary["x_on_graded"]))
         return summary
 
+    def diagnostic(self, name, value):
+        """One summary number about OUR predictions: their agreement with Smart Tagging, their
+        stability under perturbation (AGENTS.md 5.3). Never an aggregate of the input."""
+        self._emit("  diag  {}: {:.3f}".format(name, value))
+
     def validate(self, path):
         """The official validator's verdict on one of our files. Returns its exit code."""
         return self._relay("validate_submission.py", path)

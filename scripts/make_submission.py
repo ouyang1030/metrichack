@@ -3,8 +3,9 @@
     python scripts/make_submission.py
     python scripts/make_submission.py --team <name>
 
-Builds the parsed cache if it is missing, runs mtah.pipeline, writes the file and runs the
-official validator on it. Runs behind the firewall (mtah/safe_run.py): the terminal only ever
+Builds the parsed cache if it is missing, checks that Smart Tagging's kickoff windows contain the
+published kickoffs (the pipeline places the second-half kickoff by them), runs mtah.pipeline,
+writes the file and runs the official validator on it. Runs behind the firewall (mtah/safe_run.py): the terminal only ever
 shows checks, the validator's verdict and summaries of our own predictions.
 """
 
@@ -15,11 +16,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mtah import cache, config, pipeline, safe_run  # noqa: E402
 from mtah.submission import write_submission  # noqa: E402
+from starter import load_smart_tagging as official_tagging  # noqa: E402
 
 
 def main(report, args):
     cache.build(report, force=args.rebuild_cache)
-    labels = pipeline.predict(cache.load_atd())
+    events = cache.load_smart_tagging()
+    report.check("Smart Tagging kickoff windows contain the published kickoffs",
+                 official_tagging.check_time_base(events)["agrees"])
+    labels = pipeline.predict(cache.load_atd(), events)
 
     path = write_submission(args.out, labels)
     report.wrote(path)
