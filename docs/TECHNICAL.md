@@ -41,6 +41,22 @@ The parsed cache is verified by rebuilding the four published baselines byte for
 IDSSE / DFL open data: 7 Bundesliga matches, labels (`BallStatus`, `BallPossession`) by DFL,
 ~1.0M frames (DATASETS.md). None of it comes from the provided match.
 
+Two more providers' matches check the exported models and are never trained or tuned on
+(`harness/external.py`): Metrica's sample games 1-3 (labels derived from Metrica's human event
+data by a written rule, `harness/metrica.py`), as provided, degraded and under stress; and
+SkillCorner's 20 open broadcast matches (automatic labels from its phases of play and
+possession group, `harness/skillcorner.py`), as provided. On Metrica v2 keeps the lead it has
+on DFL (spellF1 0.805 degraded against v1's 0.498); on SkillCorner, where the broadcast camera
+sees about 16 players, it falls slightly behind v1 on spellF1 (0.378 against 0.392) and stays
+ahead on macroF1 (EXPERIMENTS.md, 10-31).
+
+## Acknowledgements
+
+IDSSE / DFL open data: Bassek, Rein, Weber & Memmert (2025), *Scientific Data* 12:195,
+CC BY 4.0. Sample tracking and event data by Metrica Sports
+(github.com/metrica-sports/sample-data). Open broadcast tracking data by SkillCorner
+(github.com/SkillCorner/opendata, MIT).
+
 ## Possession rules implemented
 
 v2 learns the frame-level evidence from DFL's labels instead of hand-written rules (v1 used
@@ -63,6 +79,9 @@ even of the same team.
 - Short possessions remain hard: on the calibrated copies v2 finds 46% of those under 4 s, 86%
   of the longer ones, and predicts about 0.8 times as many possessions as there are (DFL
   labels).
+- v2's features were learnt with every player tracked. With players missing, as on
+  SkillCorner's broadcast tracking, it loses its lead over v1 on spellF1. The ATD is tracked
+  from the tactical camera, so this matters only where it loses players.
 - The touch features need well-located balls; under the partly calibrated noise (with the ATD's
   false-detection rate) they still gave +0.03.
 - Half of the training copies are drawn between the calibrated noise and the stress copy's.

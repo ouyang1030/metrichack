@@ -28,6 +28,11 @@ The match data is gated and is **not** in this repository. Unpack the organisers
 `./data/` with the names it ships with (`data/tactical/BAR-ATH_tactical_atd.txt`, …), or point
 `MTAH_DATA_DIR` to it. Never commit it: `.gitignore` and the pre-commit hook both block it.
 
+Off-game data (DATASETS.md), only for the harness, all under the gitignored `external/`:
+`external/idsse/` (IDSSE / DFL, figshare), `external/metrica/` (the files of
+github.com/metrica-sports/sample-data `data/Sample_Game_{1,2,3}/`), `external/skillcorner/`
+(the `data/matches/` folder of github.com/SkillCorner/opendata, or a link to it).
+
 ## The one command
 
 ```bash
@@ -53,6 +58,7 @@ Other entry points:
 | `scripts/calibrate_noise.py` | fit the noise simulator to the ATD under STRICT (statistics and knobs go to `cache/aggregates/`, unseen); needed before `harness.train_v2` |
 | `python -m harness.idsse` / `harness.score` | off-game harness: parse IDSSE, score the baselines |
 | `python -m harness.train_v2` | (after `calibrate_noise.py`) cross-validate v2 against v1 and smooth50 (clean, degraded, stress; DFL's labels and Metrica's rule), then write `models/v2.json` (about an hour; `harness.train_v1`: the same for v1) |
+| `python -m harness.metrica` / `harness.skillcorner` / `harness.external` | parse Metrica's sample games and SkillCorner's open data, then score the exported models on them |
 | `.venv/bin/python -m pytest` | tests (synthetic data only) |
 
 ## Data firewall
@@ -81,7 +87,8 @@ mtah/                             our package
   pipeline.py                     cache -> labels (v2)
   submission.py, frames.py        write/validate/summarise a file; graded frames
 scripts/                          entry points; hooks/ holds the pre-commit data guard
-harness/                          off-game harness: IDSSE loader, ATD noise simulator, scoring
+harness/                          off-game harness: IDSSE, Metrica and SkillCorner loaders, ATD
+                                  noise simulator and its calibration, training, scoring
 models/                           weights fitted on off-game data only (v2.json; v1.json)
 tests/                            unit tests and the synthetic-bundle generator
 docs/                             technical document, plans, literature, organiser questions

@@ -745,3 +745,45 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   frames: 1.3% of graded frames change, possessions x1.03, spellF1 against the original 0.94.
   More and shorter possessions, as on the harness (predicted / true 0.80 against 0.77 on DFL).
   No sign of a bug. Public window not looked at.
+
+## 2026-10-31 — other providers' matches: Metrica's sample games and SkillCorner (check, no change)
+
+- **Question.** Does what was chosen on DFL hold where tracking, label semantics and noise come
+  from elsewhere? Not a tuning set: nothing is fitted or chosen here (`harness/external.py`).
+- **Data** (DATASETS.md). Metrica's sample games 1-3 (`harness/metrica.py`): labels from
+  Metrica's events -- possession from the latest pass, carry, set piece, shot or recovery; dead
+  from a stoppage (ball out, shot out or goal, a foul, a hand ball, an offside) to the next
+  restart, unless play goes on in between (advantage). 315-377 possessions, 89-92 stoppages,
+  dead share 0.29-0.41 per game; the ball as provided is missing on 5-6% of live frames and
+  85-100% of dead ones. SkillCorner's 20 open matches (`harness/skillcorner.py`): broadcast
+  tracking at 10 fps, interpolated to 25; labels from SkillCorner's automatic phases of play and
+  possession; about 16 of 22 players in view, ball missing 0.40, dead share median 0.45, about
+  318 possessions per match.
+- **Methods.** `models/v1.json`, `models/v2.json` (v2.2, mixed copies) as exported, trained on
+  DFL only; v2 without Smart Tagging; baseline_smooth50. Metrica as provided, degraded with the
+  noise calibrated to the ATD (the 10-29 calibration, seeds 0-2) and with the stress noise;
+  SkillCorner as provided only (its noise is real). Official metric per half, 5-95% bootstrap
+  interval over halves.
+- **Result** (spellF1; M1 labels, own labels in brackets for v2; macroF1 of v2):
+
+  | | smooth50 | v1 | v2 | v2 minus v1 | v2 macroF1 |
+  |---|---|---|---|---|---|
+  | Metrica, provided | 0.441 | 0.626 | 0.840 [0.824, 0.856] (own 0.827) | +0.214 [+0.195, +0.233] | 0.929 |
+  | Metrica, degraded | 0.335 | 0.498 | 0.805 [0.790, 0.820] (own 0.792) | +0.308 [+0.298, +0.317] | 0.931 |
+  | Metrica, stress | 0.198 | 0.305 | 0.712 [0.680, 0.743] (own 0.701) | +0.407 [+0.373, +0.438] | 0.900 |
+  | SkillCorner, provided | 0.264 | 0.392 | 0.378 [0.367, 0.389] (own 0.357) | -0.015 [-0.023, -0.006] | 0.799 |
+
+  On own labels v2 minus v1 is +0.214 / +0.305 / +0.399 on Metrica and -0.010 [-0.019, -0.002]
+  on SkillCorner; v1's macroF1 is 0.854 / 0.817 / 0.728 / 0.776.
+- **Reading.** On Metrica the ranking and margins of DFL hold, under Metrica's own labels too:
+  v2 is far ahead of v1 and of the baseline, provided, degraded and under stress. Absolute
+  levels are not comparable with DFL's (other label semantics, tracking and noise).
+  On SkillCorner v2 loses its lead on spellF1 (slightly behind v1) and keeps it on macroF1. The
+  broadcast camera sees about 16 players and loses the ball where it leaves the picture; v2's
+  per-team counts and nearest distances were learnt with every player tracked, as the ATD's
+  tactical camera allows. SkillCorner is further from the ATD than DFL is, so this is a warning
+  about v2's dependence on complete player tracking, not a reason to change it.
+- **Note.** numpy's matmul raised overflow and invalid-value warnings in v1 on Metrica; the
+  design matrices and their products are finite (checked), so these are numpy's spurious
+  warnings on this machine.
+- **Decision.** No change.

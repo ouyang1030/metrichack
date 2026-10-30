@@ -56,6 +56,13 @@ Each one goes in `DATASETS.md` with source, licence and who labelled it.
   published scores are only a comparison point: OVERVIEW.md withholds full-match ground-truth
   statistics precisely so that nothing is tuned against them, so no simulator parameter is set
   from them. The simulator is calibrated from ATD aggregates under STRICT only.
+- 2026-10-30 — Metrica Sports sample data (games 1–3), downloaded from
+  github.com/metrica-sports/sample-data into `external/metrica/` (gitignored). Other, anonymised
+  matches; their event data is human-labelled by Metrica, which AGENTS.md 2.5 allows for other
+  games. Inspected normally. Used only to score the exported models, never to train or choose.
+- 2026-10-30 — SkillCorner open data (20 A-League matches, MIT), read in place from a local copy
+  through `external/skillcorner` (gitignored symlink). Labels are SkillCorner's automatic
+  outputs. Inspected normally. Used only to score the exported models, never to train or choose.
 
 ## Rule questions
 
