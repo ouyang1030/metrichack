@@ -787,3 +787,39 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   design matrices and their products are finite (checked), so these are numpy's spurious
   warnings on this machine.
 - **Decision.** No change.
+
+## 2026-10-31 — simulator: a dead ball carried to its restart spot (calibrations v3 and v3b rejected)
+
+- **Hypothesis.** The 10-29 calibration does not reproduce when the ball is found again (mean
+  gap, the ball's speed after a gap, the players' speed-up), most likely because DFL's dead ball
+  stands still where it went dead and then jumps to the restart spot, where a real one is
+  carried there and placed. With the ball carried in the copies, the fit should reproduce that
+  side of the dropout too.
+- **Change.** `degrade.place_dead_ball`, knobs `ball_dead_carry_mps` and `ball_dead_place_s`
+  (0 m/s: off, the copies unchanged bit for bit): in each stoppage the ball stays where it went
+  dead, then is carried in a straight line at that speed to where it is at the restart, to lie
+  there still for an exponential time of that mean; a stoppage that ends a half is left as it
+  is. Its own random stream, so common random numbers hold. Calibration: both knobs in the
+  least-squares group (1-6 m/s, 0-6 s) and a new statistic, the share of seen, plausible ball
+  frames slower than 0.5 m/s.
+- **Recovery check on DFL** (`harness/recovery.py`; known knobs, carried at 3 m/s and placed
+  for 3 s; this run also fitted a smoothing of the ball's track and gave the two knobs wider
+  ranges): the dropout knobs of 10-29 come back about as before (share lost 0.85 -> 0.847, other
+  dropout 0.010 -> 0.009, false detections 0.010 -> 0.008, delays 0.40 -> 0.50 s and -0.60 ->
+  -0.82 s, sightings 2.0 -> 2.8 per min); carry and place do not (9.2 m/s and 8.8 s), because
+  the statistics barely depend on them. Every dropout statistic within 6%. The smoothing went to
+  its bound, unidentifiable, and was dropped before the runs below.
+- **On the ATD** (STRICT; only pass / fail seen). Rule set before the first run: adopt only if
+  the fit reproduces (within 10%) every statistic the 10-29 one does, plus at least one more.
+  - v3, with the still share: reproduces the players (3), missing share, long share, speed
+    before a gap, jumps; no longer flicker or the players' slowdown. Fails the rule.
+  - v3b, run after v3 failed, on the guess that the still share pulled the fit off those two:
+    the fit without it reproduces exactly the 10-29 set (players, missing, flicker, long share,
+    speed before a gap, slowdown, jumps) and nothing more; mean gap, crowd ratio, speed after a
+    gap, speed-up, still share and ball jitter stay out. Fails the rule.
+  Ball and player jitter at the bottom of their ranges in both, as before.
+- **Decision.** Both rejected. `degrade.CALIBRATION` stays "" (the 10-29 files, untouched;
+  `scripts/calibrate_noise.py` now writes each calibration under its own tag, so none
+  overwrites another). The placed dead ball stays in the simulator, off; the calibrator is
+  unchanged. When the ball is found again remains what the calibration cannot pin down; the
+  mixed training copies (10-30) are the hedge for it.

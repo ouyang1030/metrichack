@@ -4,10 +4,11 @@
 
 Measures the noise statistics of the ATD's graded frames (harness/calibrate.py), then fits the
 simulator's knobs on the harness matches until their degraded copies show the same. All go to
-cache/aggregates/ (atd_noise.json; noise_params.json, read by degrade.calibrated(); and
-fitted_noise.json, the fitted copies' statistics, for the team to compare); under STRICT none is
-shown. The terminal says, per knob, only whether the ATD's statistic lay within
-the knob's search range, and per statistic whether the fitted copies reproduce it to within 10%.
+cache/aggregates/ (atd_noise<tag>.json; noise_params<tag>.json, read by degrade.calibrated(); and
+fitted_noise<tag>.json, the fitted copies' statistics, for the team to compare; the tag is
+degrade.CALIBRATION, so that a new calibration never overwrites an earlier one); under STRICT
+none is shown. The terminal says, per knob, only whether the ATD's statistic lay within the
+knob's search range, and per statistic whether the fitted copies reproduce it to within 10%.
 """
 
 import dataclasses
@@ -27,7 +28,7 @@ def main(report):
     atd = cache.load_atd()
     target = calibrate.statistics(atd.players, atd.ball, games.GAMES[games.GAME]["pitch"],
                                   frames.graded_runs())
-    report.aggregates("atd_noise", target)
+    report.aggregates("atd_noise" + degrade.CALIBRATION, target)
 
     report.status("fitting the simulator on the harness matches")
     matches = idsse.load_all()
@@ -35,7 +36,7 @@ def main(report):
     for knob, ok in reached.items():
         report.check("{} within its search range".format(knob), ok)
     fitted = calibrate.mean_statistics(matches, params)
-    report.aggregates("fitted_noise", fitted)  # for the team to set beside atd_noise
+    report.aggregates("fitted_noise" + degrade.CALIBRATION, fitted)  # beside atd_noise
     for name in target:
         report.check("fitted copies reproduce {} to within 10%".format(name),
                      np.isclose(fitted[name], target[name], rtol=0.1, atol=1e-4))

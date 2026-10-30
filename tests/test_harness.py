@@ -103,6 +103,36 @@ def test_sightings_split_lost_stoppages_and_none_are_lost_by_default():
     assert not lost(degrade.Params()).any()
 
 
+def _frozen_dead_ball(match):
+    """match with DFL's dead ball: standing where it went dead until the restart."""
+    ball = match.ball.copy()
+    starts, stops = degrade._stoppages(match.labels)
+    for start, stop in zip(starts, stops):
+        ball[start:stop] = ball[start]
+    return replace(match, ball=ball)
+
+
+def test_a_placed_dead_ball_leaves_where_it_went_dead_and_lies_still_on_the_restart_spot():
+    match = _frozen_dead_ball(_match())
+    params = replace(degrade.Params(), ball_dead_carry_mps=4.0, ball_dead_place_s=1.0)
+    ball = degrade.place_dead_ball(match, params, np.random.default_rng(0))
+    starts, stops = degrade._stoppages(match.labels)
+    pitch = np.array(match.pitch)
+    restarts = [(start, stop) for start, stop in zip(starts, stops)
+                if stop < len(ball) and match.labels[stop] != pm.X]
+    for start, stop in restarts:
+        np.testing.assert_array_equal(ball[start, :2], match.ball[start, :2])
+        step = np.hypot(*(np.diff(ball[start:stop + 1, :2], axis=0) * pitch).T) * degrade.FPS
+        assert step.max() <= 4.0 * (1 + 1e-9) or step[0] > 4.0  # no jump unless time ran short
+        assert np.allclose(ball[stop - 1, :2], match.ball[stop, :2])
+    unchanged = np.ones(len(ball), dtype=bool)
+    for start, stop in restarts:
+        unchanged[start:stop] = False
+    np.testing.assert_array_equal(ball[unchanged], match.ball[unchanged])
+    off = degrade.place_dead_ball(match, degrade.Params(), np.random.default_rng(0))
+    np.testing.assert_array_equal(off, match.ball)
+
+
 def test_without_false_detections_the_copies_are_unchanged():
     match = _match()
     a = degrade.degrade(match, seed=2)

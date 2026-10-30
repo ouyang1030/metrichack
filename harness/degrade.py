@@ -13,6 +13,10 @@ detections; off by default until the calibration measures them). And what a trac
 when play stops: lose the ball for the whole stoppage, from about when it goes dead to about the
 restart, but for brief sightings while it is placed or carried (lost stoppages; off by default,
 the calibration decides how much of the missing ball they explain).
+Not noise, but a gap of the harness itself: DFL's ball stands still where it went dead until the
+restart, then jumps to the restart spot (a median 6 m in one frame). A real one is carried there
+and placed (placed dead ball; off: fitted to the ATD, it reproduced nothing more than the
+calibration without it, EXPERIMENTS.md 10-31).
 
 Params holds every knob. The defaults are guesses anchored on the numbers DATA.md publishes.
 scripts/calibrate_noise.py fits the knobs the ATD can measure to the ATD (harness/calibrate.py)
@@ -31,7 +35,12 @@ from mtah import atd, config
 from evaluation import possession_metrics as pm
 
 FPS = 25
-CALIBRATED = os.path.join(config.CACHE_DIR, "aggregates", "noise_params.json")
+# Which calibration calibrated() reads: scripts/calibrate_noise.py writes noise_params<tag>.json
+# (and atd_noise<tag>, fitted_noise<tag>) to cache/aggregates/; a new tag keeps the earlier ones.
+# "": the calibration with lost stoppages (10-29), in use. "_v3", "_v3b": with the dead ball
+# carried and placed, fitted with and without the share of still frames (rejected, 10-31).
+CALIBRATION = ""
+CALIBRATED = os.path.join(config.CACHE_DIR, "aggregates", "noise_params%s.json" % CALIBRATION)
 SIGHTINGS = 64  # brief sightings drawn per stoppage; the rate decides how many fall inside it
 
 
@@ -53,6 +62,9 @@ class Params:
     ball_dead_lag_sd_s: float = 0.5     # spread of both delays from one stoppage to the next
     ball_dead_seen_per_min: float = 0.0  # brief sightings per minute of a lost stoppage
     ball_dead_seen_s: float = 1.0       # their mean length
+    ball_dead_carry_mps: float = 0.0    # speed the dead ball is carried to the restart spot at;
+                                        # 0: it stands where it went dead, as in DFL's data
+    ball_dead_place_s: float = 2.0      # mean time it lies still on that spot before the restart
     crowd_radius: float = 3.0           # m
     person_missing: float = 0.07        # share of a person's frames untracked (20.5 of 22)
     gap_mean_s: float = 1.5             # mean untracked stretch between two tracklets
@@ -97,8 +109,10 @@ def drop_ball(match, params, rng):
     threshold in bursts of short gaps (a flickering detector), and a smooth one, in which a gap
     lasts as long as the noise stays high (a ball lost until it is found again). Each part draws
     from its own stream (rng.spawn), so that changing one knob changes only what that knob does
-    (common random numbers, which the calibration's least squares relies on)."""
-    dropout_rng, smooth_rng, jitter_rng, false_rng, stoppage_rng = rng.spawn(5)
+    (common random numbers, which the calibration's least squares relies on). The dead ball is
+    placed first (place_dead_ball())."""
+    dropout_rng, smooth_rng, jitter_rng, false_rng, stoppage_rng, place_rng = rng.spawn(6)
+    match = replace(match, ball=place_dead_ball(match, params, place_rng))
     length, width = match.pitch
     ball_x, ball_y = match.ball[:, atd.X] * length, match.ball[:, atd.Y] * width
     near = np.hypot(match.players[:, :, atd.X] * length - ball_x[:, None],
@@ -128,15 +142,48 @@ def drop_ball(match, params, rng):
     return ball
 
 
+def _stoppages(labels):
+    """(starts, stops) of the runs of dead frames."""
+    dead = np.r_[False, labels == pm.D, False]
+    edges = np.flatnonzero(dead[1:] != dead[:-1])
+    return edges[::2], edges[1::2]
+
+
+def place_dead_ball(match, params, rng):
+    """The ball with DFL's dead ball, which stands where it went dead and jumps to the restart
+    spot at the restart, carried there instead: it leaves at params.ball_dead_carry_mps in time to
+    lie still on the spot for about params.ball_dead_place_s (exponential, drawn per stoppage)
+    before the restart, or as long as the stoppage allows. A stoppage that ends a half keeps its
+    ball. A copy of the ball as it is while ball_dead_carry_mps is 0."""
+    ball = match.ball.copy()
+    starts, stops = _stoppages(match.labels)
+    holds = rng.exponential(params.ball_dead_place_s * FPS, len(starts))
+    if params.ball_dead_carry_mps == 0:
+        return ball
+    pitch = np.asarray(match.pitch)
+    for start, stop, hold in zip(starts, stops, holds):
+        if stop == len(ball) or match.labels[stop] == pm.X:
+            continue
+        origin, spot = ball[start, :2], ball[stop, :2]
+        carry = np.hypot(*((spot - origin) * pitch)) / params.ball_dead_carry_mps * FPS
+        arrive = max(start, stop - 1 - int(round(hold)))
+        leave = max(start, arrive - int(np.ceil(carry)))
+        t = np.arange(start, stop)
+        share = np.clip((t - leave) / max(arrive - leave, 1), 0.0, 1.0)
+        ball[start:stop, :2] = origin + share[:, None] * (spot - origin)
+        ball[start:stop, atd.SPEED] = np.where((t >= leave) & (t < arrive),
+                                               carry / max(arrive - leave, 1)
+                                               * params.ball_dead_carry_mps, 0.0)
+    return ball
+
+
 def lost_in_stoppages(match, params, rng):
     """The in-play frames on which the tracker has lost a dead ball: in params.ball_dead_lost of
     the stoppages, from about params.ball_dead_on_s after the ball goes dead to about
     params.ball_dead_off_s after the restart, but for brief sightings (the ball placed, picked up,
     carried) at params.ball_dead_seen_per_min. Every draw is made per stoppage whatever the
     knobs, so that a knob moves only what it controls (common random numbers)."""
-    dead = np.r_[False, match.labels == pm.D, False]
-    edges = np.flatnonzero(dead[1:] != dead[:-1])
-    starts, stops = edges[::2], edges[1::2]
+    starts, stops = _stoppages(match.labels)
     chosen = rng.random(len(starts)) < params.ball_dead_lost
     lags = params.ball_dead_lag_sd_s * rng.standard_normal((len(starts), 2))
     first = starts + np.round((params.ball_dead_on_s + lags[:, 0]) * FPS).astype(int)

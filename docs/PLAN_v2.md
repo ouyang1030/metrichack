@@ -63,10 +63,13 @@ form), video.
 - [ ] Ablations for the document: without the look-ahead windows, without team swapping,
   trained on clean instead of degraded.
 - [ ] Smart Tagging fused at decoding time with a fixed, documented weight (needs the data).
-- [ ] Simulator calibration from ATD aggregates (STRICT), then re-choose kappa and retrain
+- [x] Simulator calibration from ATD aggregates (STRICT), then re-choose kappa and retrain
   (needs the data). Includes the false-detection rate (`degrade.Params.ball_false`, off by
   default), from aggregates such as the share of in-play frames where the ball jumps faster
   than a ball flies (over ~40 m/s between frames) and how long such runs last; then decide
   between default and randomised training noise (step 1).
-- [ ] BAR-ATH diagnostics of v2 (possession count, durations, flicker, Smart Tagging
-  agreement, stability when more ball frames are dropped).
+  *Done 10-29/30:* lost stoppages; mixed copies adopted by the team (EXPERIMENTS.md). 10-31: a
+  dead ball carried to its restart spot instead of DFL's frozen one, fitted twice; rejected, it
+  reproduces nothing more on the ATD.
+- [x] BAR-ATH diagnostics of v2 (possession count, durations, flicker, Smart Tagging
+  agreement, stability when more ball frames are dropped). *Done 10-29*, after every refit since.
