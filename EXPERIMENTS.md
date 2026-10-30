@@ -735,7 +735,9 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   `models/v2.json` refitted at the setting the cross-validation chose for it, kappa 0.6, gamma
   1.5. Pipeline version v2.2.
 - **Checks:** tests pass; two runs of the one command byte-identical; the official validator
-  accepts the file.
+  accepts the file. After the commit (c1d1d6a), `scripts/check_reproducibility.sh`: two
+  clean-room runs (fresh export, fresh virtualenv, empty cache) byte-identical to each other and
+  to the file of the working copy.
 - **Unsupervised diagnostics** (our predictions only; the plain refit of the entry above ->
   mixed): 309 -> 322 possessions, duration p10/p50/p90 1.9 / 6.2 / 29.1 s, under 1 s 1.9% ->
   3.7%, 41.5% dead; pre-kickoff stretch dead 97.6%. Agreement with Smart Tagging team tags 0.71
