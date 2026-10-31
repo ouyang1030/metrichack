@@ -976,4 +976,6 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   looked at.
 - **Reproduction.** After items 3-7 (a5ae200), `scripts/check_reproducibility.sh`: two
   clean-room runs (fresh export, fresh virtualenv, empty cache) byte-identical to each other and
-  to the file of the working copy (v2.2).
+  to the file of the working copy (v2.2). Again after the team name was set to `kicker`
+  (c4f8ce7): both runs write `kicker.csv`, byte-identical to each other and to the working
+  copy's, which is byte-identical to the earlier `TEAM_NAME.csv`.
