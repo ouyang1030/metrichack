@@ -13,7 +13,7 @@ sys.path.insert(0, ROOT)  # games.py, evaluation/ and starter/ live at the repos
 
 # The registered team name. It names the submission file only; it never changes its content.
 # Placeholder until the team confirms the name stated in the registration form.
-TEAM_NAME = "TEAM_NAME"
+TEAM_NAME = "kicker"
 
 # AGENTS.md section 4. "STRICT": input aggregates are written to CACHE_DIR, never printed.
 # "AGGREGATES": up to ~20 low-dimensional input aggregates may be printed. Only the team changes

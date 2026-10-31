@@ -14,7 +14,7 @@ from check_staged import FRAME_ROWS, MAX_BYTES, blocked_reason  # noqa: E402
     ("debug/overlay.png", 10, 0),
     ("clip.mp4", 10, 0),
     ("models/features.npz", 10, 0),
-    ("evaluation/results/TEAM_NAME.csv", 10, 3),
+    ("evaluation/results/kicker.csv", 10, 3),
     ("evaluation/reports/baseline_raw_transitions.csv", 10, 3),
     ("models/weights.bin", MAX_BYTES + 1, 0),
     ("notes/predictions.csv", 10, FRAME_ROWS + 1),

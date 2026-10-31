@@ -1,6 +1,6 @@
 """Score files against the PUBLIC 5-minute window -- as an alarm only -- and log the look.
 
-    python scripts/smoke_test_public.py --reason "v1 smoke test" evaluation/results/TEAM_NAME.csv
+    python scripts/smoke_test_public.py --reason "v1 smoke test" evaluation/results/kicker.csv
 
 AGENTS.md 5.4: the public window checks that the pipeline is correct (alignment, file format,
 label semantics). It never chooses between variants, never sets a threshold, and is never looked

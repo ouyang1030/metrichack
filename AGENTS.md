@@ -5,7 +5,7 @@
 > `RULES.md` for what is allowed, `evaluation/possession_metrics.py` for the metric, `DATA.md` for
 > the data. If something here looks wrong, say so — do not silently work around it.
 
-Team name: `<TEAM_NAME>` · Deadline: **2026-11-17** · Internal freeze: **2026-11-14**
+Team name: `kicker` · Deadline: **2026-11-17** · Internal freeze: **2026-11-14**
 Official repo: https://github.com/metrica-sports/more-than-a-hack-2027
 
 ---

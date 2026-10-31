@@ -36,7 +36,7 @@ github.com/metrica-sports/sample-data `data/Sample_Game_{1,2,3}/`), `external/sk
 ## The one command
 
 ```bash
-.venv/bin/python scripts/make_submission.py        # -> evaluation/results/TEAM_NAME.csv
+.venv/bin/python scripts/make_submission.py        # -> evaluation/results/kicker.csv
 ```
 
 The command parses the bundle into `cache/` (first run only; `--rebuild-cache` after a new
