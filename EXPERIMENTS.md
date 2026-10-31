@@ -974,3 +974,6 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   on M2). The weights stay in the code (`short_s`, off), out of `VARIANTS`; `harness/segments.py`
   stays as a diagnostic. `models/v2.json` and the submission unchanged. Public window not
   looked at.
+- **Reproduction.** After items 3-7 (a5ae200), `scripts/check_reproducibility.sh`: two
+  clean-room runs (fresh export, fresh virtualenv, empty cache) byte-identical to each other and
+  to the file of the working copy (v2.2).
