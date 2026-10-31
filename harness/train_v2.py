@@ -22,12 +22,18 @@ spellF1 over the degraded and stress copies and the CHOICE label sets: how noisy
 not known yet, and a low temperature holds up better under heavy noise (EXPERIMENTS.md).
 ACCEPTED is set by hand after reading the comparison with REFERENCE (AGENTS.md 5.5; a variant
 must not lose on any label set); only then is it refitted on all seven matches and exported.
+Ablations for the technical document (ABLATIONS) are first-stage variants, each compared with
+the first stage as accepted (ABLATION_REFERENCE): a second stage per ablation would cost seven
+fits per fold each. The accepted variant's out-of-fold outputs (P(H, A, D) and the change
+probabilities per copy) are saved with its decoder model (OOF_DIR) for decoder-level
+experiments that need no refit (harness/fuse.py, harness/segments.py).
 Nothing here touches BAR-ATH.
 """
 
 import dataclasses
 import json
 import os
+import pickle
 import time
 
 import numpy as np
@@ -53,7 +59,8 @@ CHOICE = ("DFL", "M1")  # the temperature is chosen on these; M2 is a check
 # Training copies of a match -> their feature tables; each copy gives every STRIDE-th in-play
 # frame, the n-th copy from the n-th frame on.
 COPIES = {"seed 0": lambda p: p.tables[1:2], "seeds 0-2": lambda p: p.tables[1:4],
-          "random 3": lambda p: p.random, "mixed": lambda p: p.tables[1:4] + p.random}
+          "random 3": lambda p: p.random, "mixed": lambda p: p.tables[1:4] + p.random,
+          "clean": lambda p: p.tables[:1]}
 # Decoder -> the settings it is tried at. "hmm": constant transitions; "iohmm": transitions that
 # follow a change detector (decoder.input_transitions).
 DECODERS = {"hmm": [dict(kappa=k) for k in KAPPAS],
@@ -67,6 +74,8 @@ class Variant:
     stacked: bool = False      # a second stage over the first stage's outputs (features.context)
     target: str = "DFL"        # the label set the classifiers are trained on
     drop: tuple = ()           # feature-name prefixes left out (an ablation)
+    swap: bool = True          # train on every frame twice, once with the teams swapped
+    causal: bool = False       # windows that end at the frame (features.matrix, an ablation)
 
 
 TOUCH = ("impulse", "duel_", "touch_", "lead_")  # the touch and duel features (plan step 4)
@@ -81,6 +90,14 @@ RECEPTION = ("since_contact", "until_contact", "flight_", "contact_", "hold_")  
 VARIANTS = {"gbm": Variant(stacked=True, copies="mixed", drop=RECEPTION)}
 REFERENCE = "gbm"
 ACCEPTED = "gbm"
+FIRST = Variant(copies="mixed", drop=RECEPTION)  # the accepted variant without its second stage
+ABLATIONS = {"first stage": FIRST,
+             "no look-ahead": dataclasses.replace(FIRST, causal=True),
+             "no team swap": dataclasses.replace(FIRST, swap=False),
+             "trained clean": dataclasses.replace(FIRST, copies="clean")}
+ABLATION_REFERENCE = "first stage"
+ALL = VARIANTS | ABLATIONS
+OOF_DIR = os.path.join(idsse.RAW_DIR, "oof")  # gitignored with external/
 V1 = (("near", "flow"), 1, False)  # v1 as accepted (models/v1.json), at kappa V1_KAPPA
 V1_KAPPA = 0.2
 SWAP_LABELS = np.array([emissions.A, emissions.H, emissions.D])  # indexed by H, A, D
@@ -95,6 +112,14 @@ class Prepared:
     random: list           # features.matrix per RANDOM_SEEDS copy
     stress_v1: features.Features
     stress_smooth50: np.ndarray
+    causal: list = None    # tables and random alike, causal (only if a variant needs them)
+    causal_random: list = None
+    name: str = ""
+
+
+def tables_of(p, variant):
+    """p with the feature tables the variant reads."""
+    return dataclasses.replace(p, tables=p.causal, random=p.causal_random) if variant.causal else p
 
 
 @dataclasses.dataclass
@@ -126,9 +151,12 @@ def prepare(match_id):
     random = [degrade.degrade(match, seed, degrade.drawn(NOISE, STRESS,
                                                          np.random.default_rng(seed)))
               for seed in RANDOM_SEEDS
-              if any(v.copies in ("random 3", "mixed") for v in VARIANTS.values())]
+              if any(v.copies in ("random 3", "mixed") for v in ALL.values())]
     computed = [features.matrix(m.players, m.ball, m.slot_team, m.pitch)
                 for m in versions + [stress] + random]
+    causal = ([features.matrix(m.players, m.ball, m.slot_team, m.pitch, causal=True)[0]
+               for m in versions + [stress] + random]
+              if any(v.causal for v in ALL.values()) else [None] * len(computed))
     return Prepared(
         v1=train_v1.Prepared(
             labels=match.labels, halves=match.halves,
@@ -142,7 +170,9 @@ def prepare(match_id):
         tables=[table for table, _ in computed[:len(versions) + 1]],
         random=[table for table, _ in computed[len(versions) + 1:]],
         stress_v1=features.compute(stress.players, stress.ball, stress.slot_team, stress.pitch),
-        stress_smooth50=train_v1._smooth50(stress)), computed[0][1]
+        stress_smooth50=train_v1._smooth50(stress),
+        causal=causal[:len(versions) + 1], causal_random=causal[len(versions) + 1:],
+        name=match_id), computed[0][1]
 
 
 def change_kinds(labels, halves):
@@ -157,10 +187,10 @@ def change_kinds(labels, halves):
     return kinds
 
 
-def _sample(matches, names, targets, swapped, columns=slice(None)):
+def _sample(matches, names, targets, swapped, columns=slice(None), swap=True):
     """(X, y) from (match, feature tables of its training copies) pairs: every STRIDE-th in-play
-    frame and the given columns, with targets(match) per frame, then the same frames with the
-    teams swapped and y mapped through swapped."""
+    frame and the given columns, with targets(match) per frame, then (if swap) the same frames
+    with the teams swapped and y mapped through swapped."""
     X, y = [], []
     for p, tables in matches:
         codes = targets(p)
@@ -169,6 +199,8 @@ def _sample(matches, names, targets, swapped, columns=slice(None)):
             X.append(table[in_play[n % STRIDE::STRIDE]][:, columns])
             y.append(codes[in_play[n % STRIDE::STRIDE]])
     X, y = np.concatenate(X), np.concatenate(y)
+    if not swap:
+        return X, y
     return np.concatenate((X, X[:, features.swap_index(names)])), np.concatenate((y, swapped[y]))
 
 
@@ -191,18 +223,22 @@ class Fitted:
 
 def fit_first(prepared, names, variant):
     """Classifier and change detector from the variant's training copies of the given matches."""
-    matches = [(p, COPIES[variant.copies](p)) for p in prepared]
+    matches = [(p, COPIES[variant.copies](tables_of(p, variant))) for p in prepared]
     target = variant.target
-    columns = np.array([i for i, name in enumerate(names) if not name.startswith(variant.drop)])
+    # What a causal table cannot know is NaN throughout: left out (the binning needs a value).
+    unknown = np.isnan(matches[0][1][0]).all(axis=0)
+    columns = np.array([i for i, name in enumerate(names)
+                        if not name.startswith(variant.drop) and not unknown[i]])
     names = [names[i] for i in columns]
-    X, y = _sample(matches, names, lambda p: p.targets[target], SWAP_LABELS, columns)
+    X, y = _sample(matches, names, lambda p: p.targets[target], SWAP_LABELS, columns,
+                   variant.swap)
     model = {"names": names, "prior": [float(np.mean(y == s)) for s in range(3)],
              "change_window": CHANGE_WINDOW}
     model.update(train_v1.transitions([dataclasses.replace(p.v1, labels=p.targets[target])
                                        for p in prepared]))
     X_change, kinds = _sample(matches, names, lambda p: change_kinds(p.targets[target],
                                                                      p.v1.halves),
-                              np.arange(4), columns)
+                              np.arange(4), columns, variant.swap)
     return Fitted(model, columns, HistGradientBoostingClassifier(**GBM).fit(X, y),
                   HistGradientBoostingClassifier(**GBM).fit(X_change, kinds))
 
@@ -219,10 +255,11 @@ def fit_second(prepared, names, variant):
     matches = []
     for j, p in enumerate(prepared):
         first = fit_first(prepared[:j] + prepared[j + 1:], names, variant)
-        matches.append((p, _second_tables(first, COPIES[variant.copies](p))))
+        tables = COPIES[variant.copies](tables_of(p, variant))
+        matches.append((p, _second_tables(first, tables)))
     added = features.second_stage(np.zeros((1, 0)), np.zeros((1, 3)), np.zeros((1, 4)))[1]
     X, y = _sample(matches, first.model["names"] + added, lambda p: p.targets[variant.target],
-                   SWAP_LABELS)
+                   SWAP_LABELS, swap=variant.swap)
     return HistGradientBoostingClassifier(**GBM).fit(X, y)
 
 
@@ -251,9 +288,9 @@ def cross_validate(prepared, names):
         v1_model = train_v1.fit([p.v1 for p in training], *V1)
         add("v1", held_out, [train_v1.predict(f, v1_model, V1_KAPPA) for f in
                              [held_out.v1.clean] + held_out.v1.degraded + [held_out.stress_v1]])
-        first, second = {}, {}  # (label set, copies, drop) -> fitted on the training matches
-        for name, variant in VARIANTS.items():
-            key = variant.target, variant.copies, variant.drop
+        first, second = {}, {}  # the variant less its stage choice -> fitted on the training
+        for name, variant in ALL.items():
+            key = dataclasses.replace(variant, stacked=False, decoder="")
             if key not in first:
                 first[key] = fit_first(training, names, variant)
             fitted = first[key]
@@ -261,12 +298,24 @@ def cross_validate(prepared, names):
                 if key not in second:
                     second[key] = fit_second(training, names, variant)
                 fitted = dataclasses.replace(fitted, second=second[key])
-            outputs = [fitted.outputs(X) for X in held_out.tables]
+            outputs = [fitted.outputs(X) for X in tables_of(held_out, variant).tables]
             for setting in DECODERS[variant.decoder]:
                 add(_name(name, setting), held_out,
                     [decode(probs, change, fitted.model, **setting) for probs, change in outputs])
+            if name == REFERENCE:
+                save_outputs(held_out, outputs, fitted.model)
         print("fold %d done in %.0f s" % (i, time.time() - start))
     return scores
+
+
+def save_outputs(held_out, outputs, model):
+    """The held-out match's first-stage-and-second outputs on its clean, seed and stress copies,
+    and the decoder model, to OOF_DIR/<match>.npz, for decoder-level experiments."""
+    os.makedirs(OOF_DIR, exist_ok=True)
+    np.savez_compressed(os.path.join(OOF_DIR, held_out.name + ".npz"),
+                        probs=np.array([probs for probs, _ in outputs], dtype=np.float32),
+                        change=np.array([change for _, change in outputs], dtype=np.float32),
+                        model=json.dumps(model))
 
 
 def best_settings(scores):
@@ -274,7 +323,7 @@ def best_settings(scores):
     return {name: max(DECODERS[variant.decoder], key=lambda setting: np.mean([
         scores[label_set][_name(name, setting)].rows(copy)[:, 0].mean()
         for label_set in CHOICE for copy in ("degraded", "stress")]))
-        for name, variant in VARIANTS.items()}
+        for name, variant in ALL.items()}
 
 
 def report(scores):
@@ -289,8 +338,11 @@ def report(scores):
                 name, *s.rows("clean").mean(axis=0), mean[0], low[0], high[0], mean[1],
                 *s.rows("stress").mean(axis=0), *(s.recall[:, 0] / s.recall[:, 1]),
                 s.predicted / s.recall[:, 1].sum()))
-        pairs = [(reference, "v1")] + [(_name(v, k), reference) for v, k in best.items()
-                                      if v != REFERENCE]
+        ablation = _name(ABLATION_REFERENCE, best[ABLATION_REFERENCE])
+        pairs = ([(reference, "v1")]
+                 + [(_name(v, best[v]), reference) for v in VARIANTS if v != REFERENCE]
+                 + [(reference, ablation)]
+                 + [(_name(v, best[v]), ablation) for v in ABLATIONS if v != ABLATION_REFERENCE])
         for name, other in pairs:
             for copy in ("degraded", "stress"):
                 mean, low, high = score.interval(by_name[name].rows(copy)
@@ -321,7 +373,10 @@ if __name__ == "__main__":
     prepared = [prepare(match_id) for match_id in idsse.match_ids()]
     names = prepared[0][1]
     prepared = [p for p, _ in prepared]
-    best = report(cross_validate(prepared, names))
+    scores = cross_validate(prepared, names)
+    with open(os.path.join(OOF_DIR, "scores.pkl"), "wb") as handle:  # for later comparisons
+        pickle.dump(scores, handle)
+    best = report(scores)
     export(prepared, names, VARIANTS[ACCEPTED], best[ACCEPTED])
     print("accepted %s -> wrote %s" % (_name(ACCEPTED, best[ACCEPTED]),
                                       os.path.relpath(MODEL_PATH, config.ROOT)))

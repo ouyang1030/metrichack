@@ -57,7 +57,7 @@ Other entry points:
 | `scripts/diagnose.py` | unsupervised diagnostics of our predictions on BAR-ATH: possessions and durations, the pre-kickoff stretch, agreement with Smart Tagging team tags, stability when more ball frames are removed |
 | `scripts/calibrate_noise.py` | fit the noise simulator to the ATD under STRICT (statistics and knobs go to `cache/aggregates/`, unseen); needed before `harness.train_v2` |
 | `python -m harness.idsse` / `harness.score` | off-game harness: parse IDSSE, score the baselines |
-| `python -m harness.train_v2` | (after `calibrate_noise.py`) cross-validate v2 against v1 and smooth50 (clean, degraded, stress; DFL's labels and Metrica's rule), then write `models/v2.json` (about an hour; `harness.train_v1`: the same for v1) |
+| `python -m harness.train_v2` | (after `calibrate_noise.py`) cross-validate v2 against v1 and smooth50 (clean, degraded, stress; DFL's labels and Metrica's rule) and the ablations, save the out-of-fold outputs to `external/idsse/oof/`, then write `models/v2.json` (several hours; `harness.train_v1`: the same for v1) |
 | `python -m harness.recovery` | does the calibration recover known simulator knobs on DFL |
 | `python -m harness.metrica` / `harness.skillcorner` / `harness.external` | parse Metrica's sample games and SkillCorner's open data, then score the exported models on them |
 | `.venv/bin/python -m pytest` | tests (synthetic data only) |

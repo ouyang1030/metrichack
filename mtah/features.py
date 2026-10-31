@@ -152,12 +152,15 @@ def _team_min(values, mask):
     return np.where(np.isinf(least), np.nan, least)
 
 
-def matrix(players, ball, slot_team, pitch):
+def matrix(players, ball, slot_team, pitch, causal=False):
     """((n, k) float32 features for the frame classifier, k names).
 
     Each team is measured towards the goal it attacks and every team quantity comes as a home /
     away pair, so that swapping the teams only permutes the columns (swap_index). Unknown is
-    NaN. Windows look ahead as well as back: the pipeline runs offline.
+    NaN. Windows look ahead as well as back: the pipeline runs offline. causal (an ablation)
+    makes every window end at the frame, the touch impulse known TOUCH_LAG frames after it, and
+    what only the future tells unknown, under the same names; velocities still use the
+    VELOCITY_LAG frames either side.
     """
     length, width = pitch
     n = len(ball)
@@ -182,30 +185,43 @@ def matrix(players, ball, slot_team, pitch):
     last_distance = np.hypot(player_x - last_x[:, None], player_y - last_y[:, None])
     relative = np.hypot(player_vx - ball_vx[:, None], player_vy - ball_vy[:, None])
     home, away = slot_team == atd.HOME, slot_team == atd.AWAY
-    towards_away = np.sign(centred_nanmean(_row_mean(player_x[:, away])
-                                           - _row_mean(player_x[:, home]), SIDE_WINDOW))
+    side = _row_mean(player_x[:, away]) - _row_mean(player_x[:, home])
+    towards_away = np.sign(np.nan_to_num(window_nanmean(side, 2 * SIDE_WINDOW, 0)) if causal
+                           else centred_nanmean(side, SIDE_WINDOW))
 
     columns = {}
 
+    def nanmean(values, before, after):
+        return window_nanmean(values, before + after, 0) if causal else window_nanmean(
+            values, before, after)
+
+    def mean(values, before, after):
+        return window_mean(values, before + after, 0) if causal else window_mean(
+            values, before, after)
+
+    def ahead(values):
+        """What only frames after t tell: unknown in the causal ablation."""
+        return np.full(n, np.nan) if causal else values
+
     def windows(name, values):
         for window in WINDOWS:
-            columns["%s_c%d" % (name, window)] = window_nanmean(values, window, window)
+            columns["%s_c%d" % (name, window)] = nanmean(values, window, window)
         columns[name + "_past"] = window_nanmean(values, WINDOWS[-1], 0)
-        columns[name + "_next"] = window_nanmean(values, 0, WINDOWS[-1])
+        columns[name + "_next"] = ahead(window_nanmean(values, 0, WINDOWS[-1]))
 
     columns["speed"] = median
     windows("speed", median)
-    columns["still_share"] = window_mean((tracked & (speeds < STILL_SPEED)).sum(axis=1)
-                                         / np.maximum(tracked.sum(axis=1), 1), 25, 25)
+    columns["still_share"] = mean((tracked & (speeds < STILL_SPEED)).sum(axis=1)
+                                  / np.maximum(tracked.sum(axis=1), 1), 25, 25)
     columns["tracked"] = tracked.sum(axis=1)
     columns["seen"] = seen
-    columns["seen_c25"] = window_mean(seen.astype(float), 25, 25)
+    columns["seen_c25"] = mean(seen.astype(float), 25, 25)
     columns["since_seen"] = (frames - last) / FPS
-    columns["until_seen"] = (following - frames) / FPS
+    columns["until_seen"] = ahead((following - frames) / FPS)
     columns["last_out"] = out[last]
-    columns["next_out"] = out[following]
+    columns["next_out"] = ahead(out[following])
     columns["ball_speed"] = ball_speed
-    columns["ball_speed_c12"] = window_nanmean(ball_speed, 12, 12)
+    columns["ball_speed_c12"] = nanmean(ball_speed, 12, 12)
     columns["ball_still"] = window_nanmean(np.where(np.isnan(ball_speed), np.nan,
                                                     ball_speed < STILL_SPEED), 25, 0)
     columns["touchline"] = np.minimum(last_y, width - last_y)
@@ -218,13 +234,15 @@ def matrix(players, ball, slot_team, pitch):
         return window_nanmean(v, 0, TOUCH_LAG) - window_nanmean(v, TOUCH_LAG, 0)
 
     impulse = np.hypot(change(ball_vx), change(ball_vy))
+    if causal:
+        impulse = np.r_[np.full(TOUCH_LAG, np.nan), impulse[:-TOUCH_LAG]]
     columns["impulse"] = impulse
     teams = (("home", home), ("away", away))
     nears = {team: _team_min(distance, mask) for team, mask in teams}
     lasts = {team: _team_min(last_distance, mask) for team, mask in teams}
     duel = (nears["home"] < TOUCH_RADIUS) & (nears["away"] < TOUCH_RADIUS)
     for window in WINDOWS[:2]:
-        columns["duel_c%d" % window] = window_mean(duel.astype(float), window, window)
+        columns["duel_c%d" % window] = mean(duel.astype(float), window, window)
 
     for team, mask, sign in (("home", home, towards_away), ("away", away, -towards_away)):
         near = _team_min(distance, mask)
@@ -236,25 +254,25 @@ def matrix(players, ball, slot_team, pitch):
                 seen, (np.where(mask, distance, np.inf) < radius).sum(axis=1), np.nan)
         rel = _nearest(np.where(np.isnan(distance), np.inf, distance), relative, mask)
         columns["rel_" + team] = np.where(np.isnan(near), np.nan, rel)
-        columns["team_speed_" + team] = window_nanmean(_row_mean(speeds[:, mask]), 25, 25)
-        columns["depth_" + team] = window_nanmean(
+        columns["team_speed_" + team] = nanmean(_row_mean(speeds[:, mask]), 25, 25)
+        columns["depth_" + team] = nanmean(
             sign * (_row_mean(player_x[:, mask]) - length / 2), 25, 25)
         windows("push_" + team, sign * _row_mean(player_vx[:, mask]))
-        columns["length_" + team] = window_nanmean(_row_std(player_x[:, mask]), 25, 25)
-        columns["width_" + team] = window_nanmean(_row_std(player_y[:, mask]), 25, 25)
+        columns["length_" + team] = nanmean(_row_std(player_x[:, mask]), 25, 25)
+        columns["width_" + team] = nanmean(_row_std(player_y[:, mask]), 25, 25)
         columns["goal_dist_" + team] = np.hypot(last_x - length / 2 * (1 + sign),
                                                 last_y - width / 2)
         columns["ball_v_" + team] = sign * ball_vx
-        columns["ball_v_c12_" + team] = window_nanmean(sign * ball_vx, 12, 12)
+        columns["ball_v_c12_" + team] = nanmean(sign * ball_vx, 12, 12)
         other = nears["away" if team == "home" else "home"]
         touch = np.where((near < TOUCH_RADIUS) & ~(other < near), np.nan_to_num(impulse), 0.0)
         for window in WINDOWS:
             columns["touch_b%d_%s" % (window, team)] = window_mean(touch, window, 0)
-            columns["touch_a%d_%s" % (window, team)] = window_mean(touch, 0, window)
+            columns["touch_a%d_%s" % (window, team)] = ahead(window_mean(touch, 0, window))
         lead = lasts[team] < lasts["away" if team == "home" else "home"]
         past, future = run_length(lead)
         columns["lead_past_" + team] = past / FPS
-        columns["lead_next_" + team] = future / FPS
+        columns["lead_next_" + team] = ahead(future / FPS)
 
     # Receptions and interceptions (plan step 4b): which team touched the ball last and which
     # touches it next (a player within TOUCH_RADIUS, no opponent nearer), how firmly each held it
@@ -269,18 +287,18 @@ def matrix(players, ball, slot_team, pitch):
     known_previous, known_upcoming = previous >= 0, upcoming < n
     previous, upcoming = np.maximum(previous, 0), np.minimum(upcoming, n - 1)
     columns["since_contact"] = np.where(known_previous, (frames - previous) / FPS, np.nan)
-    columns["until_contact"] = np.where(known_upcoming, (upcoming - frames) / FPS, np.nan)
-    columns["flight_m"] = np.where(known_previous & known_upcoming,
-                                   np.hypot(ball_x[upcoming] - ball_x[previous],
-                                            ball_y[upcoming] - ball_y[previous]), np.nan)
+    columns["until_contact"] = ahead(np.where(known_upcoming, (upcoming - frames) / FPS, np.nan))
+    columns["flight_m"] = ahead(np.where(known_previous & known_upcoming,
+                                         np.hypot(ball_x[upcoming] - ball_x[previous],
+                                                  ball_y[upcoming] - ball_y[previous]), np.nan))
     for team, _ in teams:
         held = contacts[team].astype(float)
         columns["contact_last_" + team] = np.where(known_previous, held[previous], np.nan)
-        columns["contact_next_" + team] = np.where(known_upcoming, held[upcoming], np.nan)
+        columns["contact_next_" + team] = ahead(np.where(known_upcoming, held[upcoming], np.nan))
         columns["hold_last_" + team] = np.where(
             known_previous, window_mean(held, HOLD_WINDOW, 0)[previous], np.nan)
-        columns["hold_next_" + team] = np.where(
-            known_upcoming, window_mean(held, 0, HOLD_WINDOW)[upcoming], np.nan)
+        columns["hold_next_" + team] = ahead(np.where(
+            known_upcoming, window_mean(held, 0, HOLD_WINDOW)[upcoming], np.nan))
 
     names = list(columns)
     return np.column_stack([np.asarray(columns[name], float) for name in names]).astype(

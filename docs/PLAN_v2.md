@@ -60,8 +60,8 @@ Not planned: player-level possession paths (PathCRF needs identities; the ATD's 
 none), explicit duration models (tried, +0.002; the input-dependent transitions are the better
 form), video.
 
-- [ ] Ablations for the document: without the look-ahead windows, without team swapping,
-  trained on clean instead of degraded.
+- [x] Ablations for the document: without the look-ahead windows, without team swapping,
+  trained on clean instead of degraded. *Done 10-31* (EXPERIMENTS.md, docs/TECHNICAL.md).
 - [ ] Smart Tagging fused at decoding time with a fixed, documented weight (needs the data).
 - [x] Simulator calibration from ATD aggregates (STRICT), then re-choose kappa and retrain
   (needs the data). Includes the false-detection rate (`degrade.Params.ball_false`, off by

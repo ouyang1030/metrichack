@@ -823,3 +823,41 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   overwrites another). The placed dead ball stays in the simulator, off; the calibrator is
   unchanged. When the ball is found again remains what the calibration cannot pin down; the
   mixed training copies (10-30) are the hedge for it.
+
+## 2026-10-31 — ablations for the technical document (no change)
+
+- **Setup.** The cross-validation of 10-30 (leave one match out; the 10-29 calibration; three
+  calibrated copies per match, a stress copy; trained on mixed copies), now with first-stage
+  ablations (`train_v2.ABLATIONS`). Each is paired with the first stage as accepted (85
+  features, team swap, mixed copies, no second stage), each decoded at its own setting, chosen
+  as v2's (mean over degraded and stress, DFL and M1): first stage kappa 0.3, gamma 1.5; no
+  look-ahead 0.2 / 1.5; no team swap 0.3 / 1.5; trained clean 0.2 / 1.0. A second stage per
+  ablation would cost seven more fits per fold each. "No look-ahead" makes every feature window
+  end at the frame (what only the future tells is unknown); the decoder still sees the whole
+  match.
+- **Reference** (first stage, spellF1 clean / degraded [5-95%] / stress): DFL 0.725 / 0.689
+  [0.667, 0.709] / 0.542; M1 0.767 / 0.727 / 0.578; M2 0.772 / 0.732 / 0.613. v2 as accepted
+  reproduces the 10-30 numbers exactly (DFL 0.749 / 0.715 [0.696, 0.733] / 0.571).
+- **Result** (paired spellF1 differences, degraded / stress):
+
+  | | DFL | M1 | M2 |
+  |---|---|---|---|
+  | no look-ahead | -0.017 [-0.021, -0.012] / -0.031 | -0.021 [-0.026, -0.016] / -0.031 | -0.036 [-0.045, -0.028] / -0.028 |
+  | no team swap | -0.006 [-0.012, +0.000] / -0.011 | -0.010 [-0.016, -0.004] / -0.008 | -0.011 [-0.016, -0.006] / -0.010 |
+  | trained clean | -0.106 [-0.128, -0.085] / -0.268 | -0.120 [-0.141, -0.101] / -0.291 | -0.151 [-0.175, -0.131] / -0.325 |
+  | second stage (v2 minus first stage) | +0.026 [+0.020, +0.032] / +0.029 | +0.022 [+0.017, +0.028] / +0.034 | +0.007 [+0.001, +0.013] / +0.035 |
+
+  macroF1 degraded: no look-ahead -0.006 to -0.008, no team swap -0.002, trained clean -0.078
+  to -0.081, second stage +0.005 to +0.007. On the clean copies the model trained clean is the
+  best (DFL 0.765 against 0.725) and predicts 0.93 times as many possessions as there are (0.75
+  for the first stage).
+- **Reading.** Training on degraded copies is by far the largest single choice: a model fitted
+  to clean tracking wins on clean tracking and collapses under the ATD's noise, most under
+  stress. Looking ahead in the feature windows is worth 0.02-0.04 (when a team gains control
+  shows in what follows), the second stage another 0.01-0.03 (more under stress), team swapping
+  about 0.01.
+- **Refit.** `models/v2.json`, refitted by the same run, differs from the committed one only in
+  the sign of 10 zeros in first-stage trees (-0.0 against 0.0, equal as numbers), presumably
+  from the feature code's refactoring for the causal ablation; the submission (v2.2) is byte for
+  byte the same.
+- **Decision.** No change; the results go into docs/TECHNICAL.md.

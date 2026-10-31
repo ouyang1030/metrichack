@@ -34,6 +34,20 @@ def test_swapping_the_teams_permutes_the_columns():
     np.testing.assert_allclose(swapped, X[:, index], equal_nan=True)
 
 
+def test_the_causal_table_does_not_change_with_the_future():
+    players, ball, slot_team = _scene()
+    X, names = features.matrix(players, ball, slot_team, PITCH, causal=True)
+    later_players, later_ball = players.copy(), ball.copy()
+    later_players[300:, :, :2] = 0.9 - later_players[300:, :, :2]
+    later_ball[300:, :2] = np.nan
+    later, later_names = features.matrix(later_players, later_ball, slot_team, PITCH, causal=True)
+    assert later_names == names
+    # Velocities are central differences over VELOCITY_LAG frames either side; side estimation
+    # is over minutes (it never flips here).
+    np.testing.assert_allclose(later[:300 - features.VELOCITY_LAG],
+                               X[:300 - features.VELOCITY_LAG], equal_nan=True)
+
+
 def _pass(receiver):
     """The reception features mid-flight: two home slots and two away ones standing still; home
     slot 0 holds the ball for 2 s, plays it to the receiver over 2 s, who then holds it for 4 s."""

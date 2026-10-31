@@ -27,6 +27,22 @@ Methods are compared on DFL's labels and on the same labels under Metrica's rule
 without control does not change possession (EXPERIMENTS.md).
 The parsed cache is verified by rebuilding the four published baselines byte for byte.
 
+## Ablations
+
+On the off-game harness (leave one match out, DFL labels, the noise calibrated to the ATD),
+each change against the first stage as accepted, spellF1 on the calibrated / stress copies
+(EXPERIMENTS.md, 10-31; the same holds under Metrica's rule):
+
+| change | spellF1 |
+|---|---|
+| trained on clean tracking instead of degraded copies | -0.106 / -0.268 |
+| feature windows that do not look ahead | -0.017 / -0.031 |
+| no team-swapped training copies | -0.006 / -0.011 |
+| second stage over ±8 s added (v2 as submitted) | +0.026 / +0.029 |
+
+Training under the simulated ATD noise matters most: a model fitted on clean tracking is the
+best on clean tracking (+0.04) and the worst under noise.
+
 ## Assets used and dropped
 
 | asset | status |
