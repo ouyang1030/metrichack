@@ -48,7 +48,7 @@ best on clean tracking (+0.04) and the worst under noise.
 | asset | status |
 |---|---|
 | tactical ATD | used (v0) |
-| Smart Tagging | parsed and cached; not used in v0 |
+| Smart Tagging | used: its kickoff windows place the second-half kickoff (the graded stretch before it is dead). Its team phases as decoder evidence: implemented, weight set on the harness with a simulated tagger calibrated to Smart Tagging; 0, rejected (EXPERIMENTS.md, 10-31) |
 | tactical homography | parsed and cached; not used |
 | tactical video, broadcast feed | not used |
 
@@ -90,6 +90,10 @@ even of the same team.
   the ball is lost and how the players slow down is reproduced; when it is found again and how
   crowded it is then, not (EXPERIMENTS.md). The decoder setting was chosen on the calibrated
   copies and a much noisier stress copy together.
+- Smart Tagging's phases did not help on the harness, even from a simulated tagger as coarse as
+  Smart Tagging with errors independent of the tracking (at most +0.005), so they are not used
+  for possession. They change BAR-ATH's possession count more than any simulated tagger
+  changes the harness's, which the simulation does not explain.
 - DFL's notion of possession and dead ball is not Metrica's; the harness compares methods, it
   does not predict BAR-ATH scores.
 - Short possessions remain hard: on the calibrated copies v2 finds 46% of those under 4 s, 86%

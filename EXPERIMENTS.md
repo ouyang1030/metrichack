@@ -861,3 +861,61 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   from the feature code's refactoring for the causal ablation; the submission (v2.2) is byte for
   byte the same.
 - **Decision.** No change; the results go into docs/TECHNICAL.md.
+
+## 2026-10-31 — Smart Tagging fused into the decoder (implemented; rejected, weight 0)
+
+- **Hypothesis.** Smart Tagging's attacking and defending phases name the team in possession;
+  as a second observation in the decoder they should correct team errors where the tracking is
+  unsure.
+- **Method** (`mtah/tagging.py`, `pipeline.tagging_evidence`). Phases -> one vote per frame, H,
+  A or none: attacking codes vote for their Team, defending codes for the other; the first and
+  last 1 s of a phase and frames where phases disagree get none, as do N/A and set pieces. Team
+  tag values map onto home / away by the words they share with the metadata's club names
+  (`make_submission` requires the mapping to be one to one). P(vote | H, A, D) is estimated on
+  the match itself by EM, the classifier's P(H, A, D) standing in for the unknown state: no
+  labels, symmetric in the two teams. weight x log P(vote | state) is added to the decoder's
+  tempered log emissions. At weight 0 the file is v2.2's, byte for byte (checked).
+- **Setting the weight** (`harness/fuse.py`; rule fixed before the runs: the weight with the
+  best mean spellF1 over both kinds of simulated tagger, degraded and stress copies, DFL and
+  M1). Smart Tagging exists only for BAR-ATH, so a phase tagger is simulated on each held-out
+  DFL match, on the saved out-of-fold outputs: from DFL's labels (errors independent of the
+  tracking, the best case) or from v2's own path (an echo of the tracking, the worst case).
+  - *First run*, a hand-set tagger (a phase per possession of 2 s or more, 20% missed, ends
+    shifted by about 1 s, team flipped in 5 / 15 / 30% of phases): weight 0.2 (on DFL,
+    independent +0.003 to +0.014 degraded, echo -0.001 to -0.013). Applied, it changed 1.8% of
+    BAR-ATH's graded frames and cut its possessions from 322 to 294 (-9%), where on the harness
+    the same weight cut them by at most 3%: the hand-set tagger was less coarse than Smart
+    Tagging. The team decided to calibrate the tagger before choosing; the file with weight 0.2
+    was never a candidate.
+  - *Calibration* (`harness/tagger.py`, `scripts/calibrate_tagger.py`, STRICT): five label-free
+    statistics of the votes on the graded frames after each kickoff -- share of frames voted,
+    mean length of a run of one vote, share of runs under 5 s, team changes per minute,
+    agreement with the tracking-only path -- measured on BAR-ATH (written, unseen) and fitted on
+    DFL by a grid search over the tagger's knobs (shortest possession with a phase, merge gap,
+    miss rate, flip rate), every draw made per possession (common random numbers). That family
+    reproduced only the team changes and the agreement. With a fifth knob (each phase end moved
+    out, or in, by `extend_s`: a phase may spill past its possession or cover part of it) and
+    wider grids, all five within 10%, every knob inside its grid or at 0 / inf; the merge gap
+    came out long (phases of one team merge across what lies between them).
+  - *With the calibrated tagger*, paired spellF1 at weight 0.1 / 0.2, degraded (stress):
+
+    | | DFL | M1 | M2 |
+    |---|---|---|---|
+    | independent | +0.003 [+0.001, +0.006] / +0.002 [-0.003, +0.006] (+0.004 / +0.005) | +0.004 / +0.003 (+0.004 / +0.005) | +0.003 / +0.003 (+0.010 / +0.009) |
+    | echo | -0.007 [-0.008, -0.006] / -0.013 [-0.015, -0.011] (-0.005 / -0.012) | -0.005 / -0.009 (-0.005 / -0.010) | -0.002 / -0.003 (-0.002 / -0.007) |
+
+    From 0.35 up both kinds lose (at 1.0: about -0.06 independent, -0.10 echo). Predicted /
+    true possessions (DFL labels, degraded, independent) at weight 0 / 0.2 / 1: 0.796 / 0.782 /
+    0.730. Chosen: weight 0.
+- **Reading.** A tagger as coarse as Smart Tagging, even with errors independent of the
+  tracking, adds at most +0.005, within noise; one that echoes the tracking costs up to -0.013
+  at 0.2. Its long phases carry little the second stage over ±8 s does not already have. The
+  calibrated tagger still lowers the harness's possession count less than Smart Tagging lowers
+  BAR-ATH's (-1.8% against -9% at 0.2): Smart Tagging remains coarser, or more trusted by the
+  EM, than any tagger simulated -- if anything, a further reason against it.
+- **Decision.** Rejected: `pipeline.TAGGING_WEIGHT = 0`, the submission stays v2.2. The fusion,
+  the simulated tagger and its calibration stay in the code. Smart Tagging is used only for the
+  kickoff windows. For the record, BAR-ATH diagnostics of the 0.2 run (our predictions only):
+  agreement with Smart Tagging 0.714 -> 0.758 in attacking phases, 0.846 -> 0.874 in defending
+  phases; stability 1.4% of graded frames changed, spellF1 against the original 0.933; no sign
+  of a bug. Public window not looked at.

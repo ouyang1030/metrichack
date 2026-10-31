@@ -4,8 +4,9 @@
     python scripts/make_submission.py --team <name>
 
 Builds the parsed cache if it is missing, checks that Smart Tagging's kickoff windows contain the
-published kickoffs (the pipeline places the second-half kickoff by them), runs mtah.pipeline,
-writes the file and runs the official validator on it. Runs behind the firewall (mtah/safe_run.py): the terminal only ever
+published kickoffs (the pipeline places the second-half kickoff by them) and that its Team tags
+map onto home and away, runs mtah.pipeline, writes the file and runs the official validator on
+it. Runs behind the firewall (mtah/safe_run.py): the terminal only ever
 shows checks, the validator's verdict and summaries of our own predictions.
 """
 
@@ -14,9 +15,21 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from mtah import cache, config, pipeline, safe_run  # noqa: E402
+from mtah import cache, config, pipeline, safe_run, tagging  # noqa: E402
 from mtah.submission import write_submission  # noqa: E402
+from starter import baseline as official_baseline  # noqa: E402
 from starter import load_smart_tagging as official_tagging  # noqa: E402
+import games  # noqa: E402
+
+
+def team_sides(report, events):
+    """Smart Tagging's Team tags -> H / A, by the metadata's club names; stops if they do not map
+    one to one."""
+    names = official_baseline.team_names(games.require(["atd_meta"])[0])
+    sides = tagging.team_sides(tagging.tag_values(events), *names)
+    report.require("Smart Tagging team names map one to one onto home and away",
+                   sides is not None and sorted(sides.values()) == [tagging.H, tagging.A])
+    return sides
 
 
 def main(report, args):
@@ -24,7 +37,7 @@ def main(report, args):
     events = cache.load_smart_tagging()
     report.check("Smart Tagging kickoff windows contain the published kickoffs",
                  official_tagging.check_time_base(events)["agrees"])
-    labels = pipeline.predict(cache.load_atd(), events)
+    labels = pipeline.predict(cache.load_atd(), events, team_sides(report, events))
 
     path = write_submission(args.out, labels)
     report.wrote(path)

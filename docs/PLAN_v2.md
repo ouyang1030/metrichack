@@ -62,7 +62,8 @@ form), video.
 
 - [x] Ablations for the document: without the look-ahead windows, without team swapping,
   trained on clean instead of degraded. *Done 10-31* (EXPERIMENTS.md, docs/TECHNICAL.md).
-- [ ] Smart Tagging fused at decoding time with a fixed, documented weight (needs the data).
+- [x] Smart Tagging fused at decoding time with a fixed, documented weight (needs the data).
+  *Done 10-31:* weight set with a simulated tagger calibrated to Smart Tagging: 0, rejected.
 - [x] Simulator calibration from ATD aggregates (STRICT), then re-choose kappa and retrain
   (needs the data). Includes the false-detection rate (`degrade.Params.ball_false`, off by
   default), from aggregates such as the share of in-play frames where the ball jumps faster

@@ -8,6 +8,10 @@ piecewise-constant spells, with switches cheaper where the change detector expec
 (mtah/decoder.py). All trees in models/v2.json were fitted on off-game matches only
 (harness/train_v2.py). The second half is graded from before its kickoff (DATA.md); graded
 frames before a half's Smart Tagging "Kick Off (Start)" window are dead (before_kickoff()).
+Smart Tagging's team phases enter the decoder as a second, tempered observation, whose
+reliability is estimated on the match itself without labels (mtah/tagging.py); its weight
+TAGGING_WEIGHT was set on the harness with a simulated tagger (harness/fuse.py): 0, so Smart
+Tagging's phases are left out.
 
 decode() is v1 (two logistic models, models/v1.json), which the harness keeps as the reference
 v2 is measured against.
@@ -18,7 +22,7 @@ import os
 
 import numpy as np
 
-from mtah import config, decoder, emissions, features, frames, refine, trees
+from mtah import config, decoder, emissions, features, frames, refine, tagging, trees
 import games
 
 VERSION = "v2.2"
@@ -35,15 +39,22 @@ def decode(f, model, kappa_dead, kappa_team):
     return refine.boundaries(path, f) if model["refine"] else path
 
 
-def decode_probs(probs, model, kappa, change=None, gamma=0.0):
+def decode_probs(probs, model, kappa, change=None, gamma=0.0, evidence=0.0):
     """H/A/D codes, the most likely path given a classifier's (n, 3) P(H, A, D | frame) and,
-    if given, a change detector's (n, 4) probabilities (decoder.input_transitions)."""
+    if given, a change detector's (n, 4) probabilities (decoder.input_transitions), plus
+    evidence, (n, 3) further log likelihoods (Smart Tagging's, weighted)."""
     if change is None:
         log_trans, _ = decoder.chain(np.array(model["log_trans"]), model["mean_frames"], 1)
     else:
         log_trans = decoder.input_transitions(np.array(model["log_trans"]), model["mean_frames"],
                                               change, model["change_window"], gamma)
-    return decoder.viterbi(emissions.tempered(probs, model["prior"], kappa), log_trans)
+    return decoder.viterbi(emissions.tempered(probs, model["prior"], kappa) + evidence,
+                           log_trans)
+
+
+def tagging_evidence(probs, vote, weight, mask):
+    """(n, 3) weighted log P(vote | H, A, D), the vote's reliability estimated over mask."""
+    return weight * tagging.log_evidence(tagging.confusion(probs, vote, mask), vote)
 
 
 KICKOFF_CODE, KICKOFF_TYPE = "set pieces", "kick off (start)"  # as starter/load_smart_tagging.py
@@ -70,8 +81,14 @@ def before_kickoff(events, n_frames=frames.N_FRAMES):
     return mask
 
 
-def predict(atd, events, pitch=games.GAMES[games.GAME]["pitch"]):
-    """One label per frame from a cache.Atd and the Smart Tagging events."""
+TAGGING_WEIGHT = 0.0  # set by harness/fuse.py (EXPERIMENTS.md, 10-31)
+
+
+def predict(atd, events, sides, pitch=games.GAMES[games.GAME]["pitch"],
+            tagging_weight=TAGGING_WEIGHT):
+    """One label per frame from a cache.Atd, the Smart Tagging events and the map of their Team
+    tags onto home and away (tagging.team_sides). tagging_weight 0 leaves Smart Tagging's phases
+    out."""
     with open(MODEL) as handle:
         model = json.load(handle)
     X, names = features.matrix(atd.players, atd.ball, atd.slot_team, pitch)
@@ -81,5 +98,8 @@ def predict(atd, events, pitch=games.GAMES[games.GAME]["pitch"]):
     if "second" in model:
         probs = trees.probabilities(features.second_stage(X, probs, change)[0], model["second"])
     probs[before_kickoff(events, len(probs))] = DEAD
+    vote = tagging.votes(tagging.phases(events, sides), len(probs))
+    evidence = tagging_evidence(probs, vote, tagging_weight, frames.graded_mask(len(probs)))
     gamma = model.get("gamma", 0.0)
-    return LABELS[decode_probs(probs, model, model["kappa"], change if gamma else None, gamma)]
+    return LABELS[decode_probs(probs, model, model["kappa"], change if gamma else None, gamma,
+                               evidence)]

@@ -58,6 +58,8 @@ Other entry points:
 | `scripts/calibrate_noise.py` | fit the noise simulator to the ATD under STRICT (statistics and knobs go to `cache/aggregates/`, unseen); needed before `harness.train_v2` |
 | `python -m harness.idsse` / `harness.score` | off-game harness: parse IDSSE, score the baselines |
 | `python -m harness.train_v2` | (after `calibrate_noise.py`) cross-validate v2 against v1 and smooth50 (clean, degraded, stress; DFL's labels and Metrica's rule) and the ablations, save the out-of-fold outputs to `external/idsse/oof/`, then write `models/v2.json` (several hours; `harness.train_v1`: the same for v1) |
+| `scripts/calibrate_tagger.py` | (after `harness.train_v2`) fit the simulated phase tagger to Smart Tagging's vote statistics under STRICT (to `cache/aggregates/`, unseen); needed before `harness.fuse` |
+| `python -m harness.fuse` | (after `calibrate_tagger.py`) Smart Tagging's weight in the decoder, with the simulated tagger on the out-of-fold outputs |
 | `python -m harness.recovery` | does the calibration recover known simulator knobs on DFL |
 | `python -m harness.metrica` / `harness.skillcorner` / `harness.external` | parse Metrica's sample games and SkillCorner's open data, then score the exported models on them |
 | `.venv/bin/python -m pytest` | tests (synthetic data only) |
@@ -85,6 +87,7 @@ mtah/                             our package
   trees.py                        gradient-boosted trees evaluated in numpy from JSON (v2)
   emissions.py                    v1 logistic evidence; tempered classifier evidence (v2)
   decoder.py, refine.py           HMM / Viterbi over H, A, D; boundary refinement (off)
+  tagging.py                      Smart Tagging phases as decoder evidence
   pipeline.py                     cache -> labels (v2)
   submission.py, frames.py        write/validate/summarise a file; graded frames
 scripts/                          entry points; hooks/ holds the pre-commit data guard
