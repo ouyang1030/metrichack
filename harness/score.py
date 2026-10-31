@@ -57,6 +57,50 @@ def spell_recall(labels, pred, halves, short_s=4.0, iou=pm.SPELL_IOU_HEADLINE):
     return counts
 
 
+BINS = (0.0, 2.0, 4.0, 10.0, np.inf)  # s, true possession lengths (outcomes)
+OUTCOMES = ("found", "merged", "split", "missed", "shifted")
+
+
+def _bin(frames):
+    return int(np.searchsorted(BINS, frames / pm.FPS, side="right")) - 1
+
+
+def outcomes(labels, pred, halves, seen):
+    """[(true length bin, outcome, ball seen)] per true possession (seen: the ball on at least
+    half of its frames, from the per-frame mask seen), and [(separator kind, length bin,
+    reproduced)] per separator of a merge; kind is "other" or "dead"."""
+    rows, separators = [], []
+    for a, b in halves:
+        truth = pm.possession_spells(labels[a:b], [(0, b - a)])
+        predicted = pm.possession_spells(pred[a:b], [(0, b - a)])
+        matched = pm.matched_gt_flags(pm.spell_overlaps(truth, predicted), len(truth),
+                                      pm.SPELL_IOU_HEADLINE)
+        for i, (start, stop, team) in enumerate(truth):
+            length = stop - start
+            covers = [(max(0, min(stop, q) - max(start, p)), p, q) for p, q, k in predicted
+                      if k == team and p < stop and q > start]
+            big = [(p, q) for c, p, q in covers if c >= length / 2]
+            if matched[i]:
+                outcome = "found"
+            elif big and any(j != i and k == team and min(q, t) - max(p, s) >= (t - s) / 2
+                             for p, q in big for j, (s, t, k) in enumerate(truth)):
+                outcome = "merged"
+            elif len(covers) >= 2:
+                outcome = "split"
+            elif not big:
+                outcome = "missed"
+            else:
+                outcome = "shifted"
+            rows.append((_bin(length), outcome, bool(seen[a + start:a + stop].mean() >= 0.5)))
+        segments = pm.segments(labels[a:b], [(0, b - a)])
+        for (_, _, before), (start, stop, kind), (_, _, after) in zip(segments, segments[1:],
+                                                                      segments[2:]):
+            if before == after and before in (pm.H, pm.A) and kind != before:
+                separators.append(("dead" if kind == pm.D else "other", _bin(stop - start),
+                                   bool(np.any(pred[a + start:a + stop] == kind))))
+    return rows, separators
+
+
 def interval(rows, seed=0):
     """(mean, low, high) per column; the interval is the 5-95% bootstrap over rows (halves)."""
     draws = np.random.default_rng(seed).integers(0, len(rows), (N_BOOT, len(rows)))

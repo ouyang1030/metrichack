@@ -30,3 +30,17 @@ def metrica(labels, halves, control_s):
                     and stops[i] - starts[i] < control_s * pm.FPS):
                 values[starts[i]:stops[i]] = before
     return out
+
+
+MIN_WEIGHED_S = 1.0  # shorter spells are mostly touches without control (Metrica's rule)
+
+
+def possession_weights(codes, halves, short_s):
+    """Per-frame training weight: short_s / max(length, MIN_WEIGHED_S) in a possession shorter
+    than short_s, else 1 -- so that short possessions, a few frames each, count in a fit."""
+    weights = np.ones(len(codes))
+    for start, stop, _ in pm.possession_spells(codes, halves):
+        length = (stop - start) / pm.FPS
+        if length < short_s:
+            weights[start:stop] = short_s / max(length, MIN_WEIGHED_S)
+    return weights

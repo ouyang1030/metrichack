@@ -72,5 +72,9 @@ form), video.
   *Done 10-29/30:* lost stoppages; mixed copies adopted by the team (EXPERIMENTS.md). 10-31: a
   dead ball carried to its restart spot instead of DFL's frozen one, fitted twice; rejected, it
   reproduces nothing more on the ATD.
+- [x] Where the possessions go wrong, now on all matches and copies (`harness/segments.py`),
+  and one targeted fix. *Done 10-31:* short possessions are lost with the ball in view, and a
+  merge is a missed short spell of the other team, not a missed stoppage. Weighing short
+  possessions more in training: +0.016 on DFL, -0.016 on M2; rejected.
 - [x] BAR-ATH diagnostics of v2 (possession count, durations, flicker, Smart Tagging
   agreement, stability when more ball frames are dropped). *Done 10-29*, after every refit since.

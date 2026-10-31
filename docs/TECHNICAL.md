@@ -98,7 +98,10 @@ even of the same team.
   does not predict BAR-ATH scores.
 - Short possessions remain hard: on the calibrated copies v2 finds 46% of those under 4 s, 86%
   of the longer ones, and predicts about 0.8 times as many possessions as there are (DFL
-  labels).
+  labels). Nearly all of them have the ball in view; what fails is telling a short possession
+  from a touch without control. Weighing them more in training finds more of them and loses
+  under the stricter reading of Metrica's rule (control for 2 s), so it was not adopted
+  (EXPERIMENTS.md, 10-31).
 - v2's features were learnt with every player tracked. With players missing, as on
   SkillCorner's broadcast tracking, it loses its lead over v1 on spellF1. The ATD is tracked
   from the tactical camera, so this matters only where it loses players.

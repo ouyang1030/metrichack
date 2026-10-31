@@ -39,3 +39,14 @@ def test_spells_next_to_a_stoppage_are_kept():
 def test_halves_are_relabelled_separately():
     labels = _labels((H, 100), (A, 10), (H, 100))
     np.testing.assert_array_equal(_metrica(labels, [[0, 105], [105, 210]]), labels)
+
+
+def test_short_possessions_weigh_more_and_sub_second_ones_no_more_than_one_second():
+    codes = np.repeat(np.array([pm.H, pm.A, pm.D, pm.A, pm.H], dtype=np.int8),
+                      [250, 10, 50, 50, 100])
+    w = semantics.possession_weights(codes, [(0, len(codes))], 4.0)
+    assert (w[:250] == 1).all()          # 10 s
+    assert (w[250:260] == 4).all()       # 0.4 s: weighed as 1 s
+    assert (w[260:310] == 1).all()       # dead
+    assert (w[310:360] == 2).all()       # 2 s
+    assert (w[360:] == 1).all()          # 4 s is not shorter than 4 s

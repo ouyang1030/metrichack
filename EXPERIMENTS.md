@@ -919,3 +919,58 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   agreement with Smart Tagging 0.714 -> 0.758 in attacking phases, 0.846 -> 0.874 in defending
   phases; stability 1.4% of graded frames changed, spellF1 against the original 0.933; no sign
   of a bug. Public window not looked at.
+
+## 2026-10-31 — where v2 loses possessions (`harness/segments.py`); short possessions weighed more in training (rejected)
+
+- **Diagnosis** (v2.2 as submitted, from the saved out-of-fold outputs: all seven matches, the
+  three calibrated degraded copies, kappa 0.6, gamma 1.5; the 10-29 diagnosis used four folds,
+  one copy and the noise before calibration). What became of each true possession:
+
+  | true length (DFL) | share | found | merged | split | missed | shifted |
+  |---|---|---|---|---|---|---|
+  | < 2 s | 30% | 0.33 (10-29: 0.15) | 0.16 (0.23) | 0.00 | 0.44 (0.53) | 0.07 |
+  | 2-4 s | 23% | 0.63 (0.47) | 0.15 (0.21) | 0.00 | 0.19 (0.23) | 0.03 |
+  | 4-10 s | 26% | 0.79 (0.73) | 0.11 (0.17) | 0.01 | 0.07 (0.04) | 0.01 |
+  | >= 10 s | 21% | 0.95 (0.95) | 0.03 (0.04) | 0.01 | 0.00 | 0.00 |
+
+  M1 / M2: under 2 s found 0.44 / 0.51, missed 0.42 / 0.41; predicted / true possessions 0.80
+  (DFL), 0.90 (M1), 1.08 (M2). Two new splits:
+  - *By ball visibility.* 96% of the possessions under 2 s (98% of 2-4 s) have the degraded
+    copy's ball on at least half their frames, and those are found no more often (0.32, missed
+    0.44) than the few without (0.46 / 0.33). The short possessions are lost with the ball in
+    view: the reading of the ball near the players fails, not the ball's detection.
+  - *Merges.* Of the segments separating two possessions of one team, stoppages are reproduced
+    almost always (4-10 s 0.98, longer 1.00; under 4 s, n 24, 0.67-0.78); spells of the other
+    team under 2 s in 0.56 (DFL; 2-4 s 0.83). A merge is a missed short possession of the
+    other team, not a missed stoppage.
+- **Hypothesis.** A short possession is a handful of training frames against minutes of long
+  ones, so the trees' fit trades the short ones away. Weighing frames by the inverse length of
+  their possession should make them read short possessions better.
+- **Change** (`semantics.possession_weights`, `train_v2.Variant.short_s`; tested). In both
+  classifier stages (not the change detector) and their class prior, every frame of a
+  possession shorter than 4 s weighs 4 s / its length, a possession under 1 s as one of 1 s
+  (shorter ones are mostly touches without control). Everything else as v2. Decoder setting
+  chosen by the usual rule (DFL and M1, degraded and stress): kappa 0.45, gamma 1.
+- **Result** (spellF1 degraded [5-95%] / stress; paired with v2):
+
+  | | DFL | M1 | M2 |
+  |---|---|---|---|
+  | v2 (kappa 0.6, gamma 1.5) | 0.715 [0.696, 0.733] / 0.571 | 0.749 [0.736, 0.762] / 0.612 | 0.739 [0.724, 0.754] / 0.648 |
+  | short weighted (0.45, 1) | 0.730 [0.717, 0.745] / 0.575 | 0.758 [0.748, 0.768] / 0.614 | 0.723 [0.708, 0.737] / 0.633 |
+  | paired, degraded | +0.016 [+0.009, +0.024] | +0.009 [+0.002, +0.016] | **-0.016 [-0.022, -0.010]** |
+  | paired, stress | +0.004 [-0.003, +0.012] | +0.002 [-0.007, +0.012] | **-0.015 [-0.025, -0.006]** |
+
+  macroF1 within -0.003. Possessions under 4 s found: 0.458 -> 0.528 (DFL), 0.553 -> 0.636
+  (M1), 0.628 -> 0.701 (M2); 4 s and longer the same. Predicted / true possessions 0.80 ->
+  0.87 (DFL), 0.90 -> 0.99 (M1), 1.08 -> 1.18 (M2). No setting of it gains on DFL and M1
+  without losing on M2 or under stress (at kappa 0.3, gamma 1: DFL +0.012 / -0.002, M2
+  -0.002 / -0.003).
+- **Reading.** The weighting does what it was meant to: more short possessions found, the
+  long ones unharmed. But the short possessions it adds are, under a 2 s control time, touches
+  without control, and M2 counts them as errors -- the label-semantics trade-off of 10-27
+  again: a gain on DFL's notion of possession is a bet against the strictest reading of
+  Metrica's. Which control time the ground truth follows is still organiser question 6.
+- **Decision.** Rejected by the criterion fixed on 10-27 (judged on DFL and M1, must not lose
+  on M2). The weights stay in the code (`short_s`, off), out of `VARIANTS`; `harness/segments.py`
+  stays as a diagnostic. `models/v2.json` and the submission unchanged. Public window not
+  looked at.

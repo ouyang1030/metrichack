@@ -147,6 +147,17 @@ def test_degrade_is_deterministic():
     np.testing.assert_array_equal(a.ball, b.ball)
 
 
+def test_a_missed_short_spell_of_the_other_team_merges_the_two_around_it():
+    labels = np.repeat(np.array([pm.H, pm.A, pm.H, pm.D, pm.A], dtype=np.int8),
+                       [100, 10, 100, 50, 100])
+    pred = np.repeat(np.array([pm.H, pm.D, pm.A], dtype=np.int8), [210, 50, 100])
+    seen = np.arange(len(labels)) < 104
+    rows, separators = score.outcomes(labels, pred, [(0, len(labels))], seen)
+    assert [outcome for _, outcome, _ in rows] == ["merged", "missed", "merged", "found"]
+    assert [ball for _, _, ball in rows] == [True, False, False, False]
+    assert separators == [("other", 0, False)]  # the stoppage lies between H and A
+
+
 def test_perfect_prediction_scores_one():
     match = _match()
     rows = score.score_halves(lambda m: np.array(pm.LABELS)[m.labels], match)

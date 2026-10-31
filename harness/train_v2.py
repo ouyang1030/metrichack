@@ -34,6 +34,7 @@ import dataclasses
 import json
 import os
 import pickle
+import sys
 import time
 
 import numpy as np
@@ -76,6 +77,7 @@ class Variant:
     drop: tuple = ()           # feature-name prefixes left out (an ablation)
     swap: bool = True          # train on every frame twice, once with the teams swapped
     causal: bool = False       # windows that end at the frame (features.matrix, an ablation)
+    short_s: float = 0.0       # frames of shorter possessions weigh more (semantics)
 
 
 TOUCH = ("impulse", "duel_", "touch_", "lead_")  # the touch and duel features (plan step 4)
@@ -86,7 +88,9 @@ RECEPTION = ("since_contact", "until_contact", "flight_", "contact_", "hold_")  
 # features; mixed copies (by the team, as an exception to AGENTS.md 5.5: within noise on the
 # calibrated copies, +0.09 under stress). Rejected: training on M1; a separate factor on
 # possession switches; the reception features (step 4b, within noise, kept as an ablation
-# group). Ablations: e.g. Variant(stacked=True, drop=TOUCH + RECEPTION), Variant(decoder="hmm").
+# group); possessions under 4 s weighed more ("short weighted", short_s=4: gains on DFL and M1,
+# loses on M2). Ablations: e.g. Variant(stacked=True, drop=TOUCH + RECEPTION),
+# Variant(decoder="hmm").
 VARIANTS = {"gbm": Variant(stacked=True, copies="mixed", drop=RECEPTION)}
 REFERENCE = "gbm"
 ACCEPTED = "gbm"
@@ -187,21 +191,27 @@ def change_kinds(labels, halves):
     return kinds
 
 
-def _sample(matches, names, targets, swapped, columns=slice(None), swap=True):
-    """(X, y) from (match, feature tables of its training copies) pairs: every STRIDE-th in-play
-    frame and the given columns, with targets(match) per frame, then (if swap) the same frames
-    with the teams swapped and y mapped through swapped."""
-    X, y = [], []
+def _sample(matches, names, targets, swapped, columns=slice(None), swap=True, short_s=0.0):
+    """(X, y, weights) from (match, feature tables of its training copies) pairs: every
+    STRIDE-th in-play frame and the given columns, with targets(match) per frame, then (if swap)
+    the same frames with the teams swapped and y mapped through swapped. weights is None unless
+    short_s (semantics.possession_weights)."""
+    X, y, w = [], [], []
     for p, tables in matches:
         codes = targets(p)
         in_play = np.flatnonzero(p.v1.labels != pm.X)
+        weights = semantics.possession_weights(codes, p.v1.halves, short_s) if short_s else None
         for n, table in enumerate(tables):
             X.append(table[in_play[n % STRIDE::STRIDE]][:, columns])
             y.append(codes[in_play[n % STRIDE::STRIDE]])
+            if short_s:
+                w.append(weights[in_play[n % STRIDE::STRIDE]])
     X, y = np.concatenate(X), np.concatenate(y)
+    w = np.concatenate(w) if short_s else None
     if not swap:
-        return X, y
-    return np.concatenate((X, X[:, features.swap_index(names)])), np.concatenate((y, swapped[y]))
+        return X, y, w
+    return (np.concatenate((X, X[:, features.swap_index(names)])), np.concatenate((y, swapped[y])),
+            None if w is None else np.concatenate((w, w)))
 
 
 @dataclasses.dataclass
@@ -230,16 +240,19 @@ def fit_first(prepared, names, variant):
     columns = np.array([i for i, name in enumerate(names)
                         if not name.startswith(variant.drop) and not unknown[i]])
     names = [names[i] for i in columns]
-    X, y = _sample(matches, names, lambda p: p.targets[target], SWAP_LABELS, columns,
-                   variant.swap)
-    model = {"names": names, "prior": [float(np.mean(y == s)) for s in range(3)],
+    X, y, w = _sample(matches, names, lambda p: p.targets[target], SWAP_LABELS, columns,
+                      variant.swap, variant.short_s)
+    model = {"names": names, "prior": [float(np.mean(y == s) if w is None
+                                             else np.average(y == s, weights=w))
+                                       for s in range(3)],
              "change_window": CHANGE_WINDOW}
     model.update(train_v1.transitions([dataclasses.replace(p.v1, labels=p.targets[target])
                                        for p in prepared]))
-    X_change, kinds = _sample(matches, names, lambda p: change_kinds(p.targets[target],
-                                                                     p.v1.halves),
-                              np.arange(4), columns, variant.swap)
-    return Fitted(model, columns, HistGradientBoostingClassifier(**GBM).fit(X, y),
+    X_change, kinds, _ = _sample(matches, names, lambda p: change_kinds(p.targets[target],
+                                                                        p.v1.halves),
+                                 np.arange(4), columns, variant.swap)
+    return Fitted(model, columns,
+                  HistGradientBoostingClassifier(**GBM).fit(X, y, sample_weight=w),
                   HistGradientBoostingClassifier(**GBM).fit(X_change, kinds))
 
 
@@ -258,9 +271,10 @@ def fit_second(prepared, names, variant):
         tables = COPIES[variant.copies](tables_of(p, variant))
         matches.append((p, _second_tables(first, tables)))
     added = features.second_stage(np.zeros((1, 0)), np.zeros((1, 3)), np.zeros((1, 4)))[1]
-    X, y = _sample(matches, first.model["names"] + added, lambda p: p.targets[variant.target],
-                   SWAP_LABELS, swap=variant.swap)
-    return HistGradientBoostingClassifier(**GBM).fit(X, y)
+    X, y, w = _sample(matches, first.model["names"] + added,
+                      lambda p: p.targets[variant.target], SWAP_LABELS, swap=variant.swap,
+                      short_s=variant.short_s)
+    return HistGradientBoostingClassifier(**GBM).fit(X, y, sample_weight=w)
 
 
 def decode(probs, change, model, kappa, gamma=0.0):
@@ -272,8 +286,9 @@ def _name(variant, setting):
     return variant + "".join(" %s=%g" % (key[0], value) for key, value in setting.items())
 
 
-def cross_validate(prepared, names):
-    """{label set: {method: Scores}}, one model per held-out match and variant."""
+def cross_validate(prepared, names, only=()):
+    """{label set: {method: Scores}}, one model per held-out match and variant (only those
+    named in only, if any, and then neither baseline nor v1)."""
     scores = {label_set: {} for label_set in LABEL_SETS}
 
     def add(name, held_out, predictions):
@@ -284,12 +299,17 @@ def cross_validate(prepared, names):
     for i, held_out in enumerate(prepared):
         start = time.time()
         training = prepared[:i] + prepared[i + 1:]
-        add("baseline_smooth50", held_out, held_out.v1.smooth50 + [held_out.stress_smooth50])
-        v1_model = train_v1.fit([p.v1 for p in training], *V1)
-        add("v1", held_out, [train_v1.predict(f, v1_model, V1_KAPPA) for f in
-                             [held_out.v1.clean] + held_out.v1.degraded + [held_out.stress_v1]])
+        if not only:
+            add("baseline_smooth50", held_out,
+                held_out.v1.smooth50 + [held_out.stress_smooth50])
+            v1_model = train_v1.fit([p.v1 for p in training], *V1)
+            add("v1", held_out, [train_v1.predict(f, v1_model, V1_KAPPA) for f in
+                                 [held_out.v1.clean] + held_out.v1.degraded
+                                 + [held_out.stress_v1]])
         first, second = {}, {}  # the variant less its stage choice -> fitted on the training
         for name, variant in ALL.items():
+            if only and name not in only:
+                continue
             key = dataclasses.replace(variant, stacked=False, decoder="")
             if key not in first:
                 first[key] = fit_first(training, names, variant)
@@ -370,13 +390,23 @@ def export(prepared, names, variant, setting):
 
 
 if __name__ == "__main__":
+    # python -m harness.train_v2 ["variant" ...]: only the named variants are cross-validated,
+    # the rest of the report comes from the last full run's scores (fitting is deterministic,
+    # so the pairs still hold), and models/v2.json is left as it is.
+    only = sys.argv[1:]
     prepared = [prepare(match_id) for match_id in idsse.match_ids()]
     names = prepared[0][1]
     prepared = [p for p, _ in prepared]
-    scores = cross_validate(prepared, names)
-    with open(os.path.join(OOF_DIR, "scores.pkl"), "wb") as handle:  # for later comparisons
+    scores = cross_validate(prepared, names, only)
+    path = os.path.join(OOF_DIR, "scores.pkl")
+    if only:
+        with open(path, "rb") as handle:
+            earlier = pickle.load(handle)
+        scores = {label_set: earlier[label_set] | scores[label_set] for label_set in scores}
+    with open(path, "wb") as handle:  # for later comparisons
         pickle.dump(scores, handle)
     best = report(scores)
-    export(prepared, names, VARIANTS[ACCEPTED], best[ACCEPTED])
-    print("accepted %s -> wrote %s" % (_name(ACCEPTED, best[ACCEPTED]),
-                                      os.path.relpath(MODEL_PATH, config.ROOT)))
+    if not only:
+        export(prepared, names, VARIANTS[ACCEPTED], best[ACCEPTED])
+        print("accepted %s -> wrote %s" % (_name(ACCEPTED, best[ACCEPTED]),
+                                          os.path.relpath(MODEL_PATH, config.ROOT)))
