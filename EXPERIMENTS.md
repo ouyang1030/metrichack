@@ -1011,3 +1011,5 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   graded frames change, possessions x1.00 (x1.03), spellF1 against the original 0.944 (0.94).
   More and shorter possessions, as on the harness. No sign of a bug; the validator accepts the
   file. Smart Tagging weight left at 0 (chosen on v2.2's outputs). Public window not looked at.
+- **Reproduction.** After the commit (d1e50b6), `scripts/check_reproducibility.sh`: two
+  clean-room runs byte-identical to each other and to the working copy's `kicker.csv` (v2.3).
