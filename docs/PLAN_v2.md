@@ -75,6 +75,7 @@ form), video.
 - [x] Where the possessions go wrong, now on all matches and copies (`harness/segments.py`),
   and one targeted fix. *Done 10-31:* short possessions are lost with the ball in view, and a
   merge is a missed short spell of the other team, not a missed stoppage. Weighing short
-  possessions more in training: +0.016 on DFL, -0.016 on M2; rejected.
+  possessions more in training: +0.016 on DFL, -0.016 on M2; rejected. *11-01:* weighing only
+  the short possessions M2 keeps: +0.006 to +0.010 on every label set; accepted (v2.3).
 - [x] BAR-ATH diagnostics of v2 (possession count, durations, flicker, Smart Tagging
   agreement, stability when more ball frames are dropped). *Done 10-29*, after every refit since.

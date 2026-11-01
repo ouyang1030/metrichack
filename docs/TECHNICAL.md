@@ -16,10 +16,13 @@ possession switches, play stops or play restarts within 0.2 s. A second stage se
 classifiers' outputs move over up to 8 s before and after (stacked sequential learning, trained
 on out-of-fold outputs) and re-estimates P(H, A, D). Each team quantity is measured from that
 team's point of view and comes as a home / away pair, and every classifier is trained on every
-frame twice, once with the teams swapped, so it cannot favour either side. An input-output HMM
+frame twice, once with the teams swapped, so it cannot favour either side. Frames of short
+possessions weigh more in training (under 4 s, inversely to their length), counted under the
+stricter reading of Metrica's rule so that only possessions every label set agrees on gain
+weight. An input-output HMM
 over H, A and D turns these into one most likely, piecewise-constant path (Viterbi): the
-evidence is tempered (kappa 0.6), and the probability of a switch, stop or restart at each
-frame follows the change detector (gamma 1.5) instead of a constant rate. The trees are stored
+evidence is tempered (kappa 0.45), and the probability of a switch, stop or restart at each
+frame follows the change detector (gamma 1) instead of a constant rate. The trees are stored
 as JSON and evaluated in numpy, so the submission needs nothing beyond numpy and pandas. v1, the
 reference it replaced, used two logistic models on two features. Everything is fitted and
 selected on other matches (IDSSE / DFL, made ATD-like by a noise simulator), never on BAR-ATH.
@@ -38,7 +41,8 @@ each change against the first stage as accepted, spellF1 on the calibrated / str
 | trained on clean tracking instead of degraded copies | -0.106 / -0.268 |
 | feature windows that do not look ahead | -0.017 / -0.031 |
 | no team-swapped training copies | -0.006 / -0.011 |
-| second stage over ±8 s added (v2 as submitted) | +0.026 / +0.029 |
+| second stage over ±8 s added (v2.2) | +0.026 / +0.029 |
+| and short possessions weighed more (v2.3, as submitted; EXPERIMENTS.md, 11-01) | +0.032 / +0.029 |
 
 Training under the simulated ATD noise matters most: a model fitted on clean tracking is the
 best on clean tracking (+0.04) and the worst under noise.
@@ -96,12 +100,13 @@ even of the same team.
   changes the harness's, which the simulation does not explain.
 - DFL's notion of possession and dead ball is not Metrica's; the harness compares methods, it
   does not predict BAR-ATH scores.
-- Short possessions remain hard: on the calibrated copies v2 finds 46% of those under 4 s, 86%
-  of the longer ones, and predicts about 0.8 times as many possessions as there are (DFL
+- Short possessions remain hard: on the calibrated copies v2 finds 49% of those under 4 s, 86%
+  of the longer ones, and predicts about 0.82 times as many possessions as there are (DFL
   labels). Nearly all of them have the ball in view; what fails is telling a short possession
-  from a touch without control. Weighing them more in training finds more of them and loses
-  under the stricter reading of Metrica's rule (control for 2 s), so it was not adopted
-  (EXPERIMENTS.md, 10-31).
+  from a touch without control. Weighing DFL's short possessions more finds more of them and
+  loses under the stricter reading of Metrica's rule (control for 2 s); weighing only those
+  that reading keeps gains on every label set, but less (+0.006 to +0.010; EXPERIMENTS.md,
+  10-31 and 11-01).
 - v2's features were learnt with every player tracked. With players missing, as on
   SkillCorner's broadcast tracking, it loses its lead over v1 on spellF1. The ATD is tracked
   from the tactical camera, so this matters only where it loses players.

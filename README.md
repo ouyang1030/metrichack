@@ -8,8 +8,8 @@ Project rules for contributors and the coding agent: [AGENTS.md](AGENTS.md).
 probability of a change of possession or play state from 85 tracking features; a second stage
 looks at how both move over ±8 s; an input-output HMM decodes them into piecewise-constant
 spells. Trained on off-game matches only (`models/v2.json`). On the off-game harness, under
-noise calibrated to the ATD: spellF1 0.715 [0.696, 0.733], +0.322 over v1 and +0.447 over the
-published floor `baseline_smooth50` (EXPERIMENTS.md, 10-31; DFL labels).
+noise calibrated to the ATD: spellF1 0.721 [0.706, 0.736], +0.328 over v1 and +0.453 over the
+published floor `baseline_smooth50` (EXPERIMENTS.md, 11-01; DFL labels; v2.3).
 
 ## Install
 

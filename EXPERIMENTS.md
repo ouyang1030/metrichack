@@ -1003,7 +1003,11 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
 - **Reading.** Smaller on DFL than DFL's weighting (+0.016), which owed much of its gain to the
   contested spells, but no label set loses. M2 now also shapes the training weights (training
   folds only), so it is less of an independent check than before.
-- **Decision.** Accepted (AGENTS.md 5.5; the 10-27 rule). BAR-ATH (our predictions only): 340
-  possessions (v2.2: 322), durations p10/p50/p90 1.7 / 5.8 / 27.8 s, under 1 s 4.1%, D 41.2%,
-  no X on graded frames; the validator accepts the file. Smart Tagging weight left at 0 (chosen
-  on v2.2's outputs). Public window not looked at.
+- **Decision.** Accepted (AGENTS.md 5.5; the 10-27 rule). BAR-ATH (our predictions only; in
+  brackets v2.2): 340 possessions (322), durations p10/p50/p90 1.7 / 5.8 / 27.8 s, under 1 s
+  4.1% (3.7%), D 41.2%, no X on graded frames; pre-kickoff stretch dead 97.6% (97.6%).
+  Agreement with Smart Tagging team tags 0.70 (0.71) in attacking phases, 0.84 (0.85) in
+  defending phases. Stability with the ball removed on about 10% more frames: 1.5% (1.3%) of
+  graded frames change, possessions x1.00 (x1.03), spellF1 against the original 0.944 (0.94).
+  More and shorter possessions, as on the harness. No sign of a bug; the validator accepts the
+  file. Smart Tagging weight left at 0 (chosen on v2.2's outputs). Public window not looked at.
