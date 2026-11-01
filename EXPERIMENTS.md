@@ -979,3 +979,31 @@ Same protocol as the diagnosis of 10-27 (folds 0, 2, 4, 6, degraded seed 1), cur
   to the file of the working copy (v2.2). Again after the team name was set to `kicker`
   (c4f8ce7): both runs write `kicker.csv`, byte-identical to each other and to the working
   copy's, which is byte-identical to the earlier `TEAM_NAME.csv`.
+
+## 2026-11-01 — M2's short possessions weighed more in training (accepted, v2.3)
+
+- **Hypothesis.** The label sets disagree only on a short spell of one team between two of the
+  other; every other possession is one under DFL, M1 and M2. The rejected weighting of 10-31
+  measured lengths on DFL's possessions and so pushed the model towards the contested spells.
+  Measured on M2's possessions, it rewards only possessions every label set counts.
+- **Change.** `Variant.short_on = "M2"` (`train_v2._weights`): frames of an M2 possession under
+  4 s weigh 4 s / its length (at most 4); target still DFL. Folded into `"gbm"`; decoder
+  setting by the usual rule: kappa 0.45, gamma 1. `models/v2.json` refitted, pipeline v2.3.
+- **Result** (spellF1 degraded [5-95%] / stress; paired with v2.2):
+
+  | | DFL | M1 | M2 |
+  |---|---|---|---|
+  | v2.3 | 0.721 [0.706, 0.736] / 0.570 | 0.757 [0.746, 0.767] / 0.612 | 0.749 [0.738, 0.760] / 0.648 |
+  | paired, degraded | +0.006 [+0.002, +0.010] | +0.007 [+0.003, +0.011] | +0.010 [+0.004, +0.016] |
+  | paired, stress | -0.000 [-0.008, +0.008] | +0.000 [-0.009, +0.009] | -0.000 [-0.011, +0.010] |
+
+  macroF1 -0.001. Possessions under 4 s found 0.458 -> 0.489 (DFL), 0.553 -> 0.598 (M1),
+  0.628 -> 0.695 (M2); predicted / true 0.80 -> 0.82 / 0.90 -> 0.93 / 1.08 -> 1.12. v2.3 minus
+  v1: +0.328 (DFL, degraded). The export run reproduced the experiment's scores exactly.
+- **Reading.** Smaller on DFL than DFL's weighting (+0.016), which owed much of its gain to the
+  contested spells, but no label set loses. M2 now also shapes the training weights (training
+  folds only), so it is less of an independent check than before.
+- **Decision.** Accepted (AGENTS.md 5.5; the 10-27 rule). BAR-ATH (our predictions only): 340
+  possessions (v2.2: 322), durations p10/p50/p90 1.7 / 5.8 / 27.8 s, under 1 s 4.1%, D 41.2%,
+  no X on graded frames; the validator accepts the file. Smart Tagging weight left at 0 (chosen
+  on v2.2's outputs). Public window not looked at.

@@ -78,6 +78,7 @@ class Variant:
     swap: bool = True          # train on every frame twice, once with the teams swapped
     causal: bool = False       # windows that end at the frame (features.matrix, an ablation)
     short_s: float = 0.0       # frames of shorter possessions weigh more (semantics)
+    short_on: str = ""         # the label set whose possessions those are (default: target)
 
 
 TOUCH = ("impulse", "duel_", "touch_", "lead_")  # the touch and duel features (plan step 4)
@@ -86,15 +87,17 @@ RECEPTION = ("since_contact", "until_contact", "flight_", "contact_", "hold_")  
 
 # Accepted (EXPERIMENTS.md, plan steps 1-4): the change detector, the second stage, the touch
 # features; mixed copies (by the team, as an exception to AGENTS.md 5.5: within noise on the
-# calibrated copies, +0.09 under stress). Rejected: training on M1; a separate factor on
-# possession switches; the reception features (step 4b, within noise, kept as an ablation
-# group); possessions under 4 s weighed more ("short weighted", short_s=4: gains on DFL and M1,
-# loses on M2). Ablations: e.g. Variant(stacked=True, drop=TOUCH + RECEPTION),
-# Variant(decoder="hmm").
-VARIANTS = {"gbm": Variant(stacked=True, copies="mixed", drop=RECEPTION)}
+# calibrated copies, +0.09 under stress); M2's possessions under 4 s weighed more (11-01: +0.006
+# to +0.010 on every label set). Rejected: training on M1; a separate factor on possession
+# switches; the reception features (step 4b, within noise, kept as an ablation group); DFL's
+# possessions under 4 s weighed more (Variant(..., short_s=4.0): gains on DFL and M1, loses on
+# M2). Ablations: e.g. Variant(stacked=True, drop=TOUCH + RECEPTION), Variant(decoder="hmm").
+VARIANTS = {"gbm": Variant(stacked=True, copies="mixed", drop=RECEPTION, short_s=4.0,
+                           short_on="M2")}
 REFERENCE = "gbm"
 ACCEPTED = "gbm"
-FIRST = Variant(copies="mixed", drop=RECEPTION)  # the accepted variant without its second stage
+# v2.2's first stage (no weights): the reference the ablations were measured against (10-31)
+FIRST = Variant(copies="mixed", drop=RECEPTION)
 ABLATIONS = {"first stage": FIRST,
              "no look-ahead": dataclasses.replace(FIRST, causal=True),
              "no team swap": dataclasses.replace(FIRST, swap=False),
@@ -191,23 +194,32 @@ def change_kinds(labels, halves):
     return kinds
 
 
-def _sample(matches, names, targets, swapped, columns=slice(None), swap=True, short_s=0.0):
-    """(X, y, weights) from (match, feature tables of its training copies) pairs: every
-    STRIDE-th in-play frame and the given columns, with targets(match) per frame, then (if swap)
-    the same frames with the teams swapped and y mapped through swapped. weights is None unless
-    short_s (semantics.possession_weights)."""
+def _weights(variant):
+    """match -> per-frame training weights (semantics.possession_weights over the possessions
+    of variant.short_on, else of its target), or None unless variant.short_s."""
+    if not variant.short_s:
+        return None
+    labels = variant.short_on or variant.target
+    return lambda p: semantics.possession_weights(p.targets[labels], p.v1.halves, variant.short_s)
+
+
+def _sample(matches, names, targets, swapped, columns=slice(None), swap=True, weights=None):
+    """(X, y, w) from (match, feature tables of its training copies) pairs: every STRIDE-th
+    in-play frame and the given columns, with targets(match) per frame and weights(match) (w
+    None if weights is), then (if swap) the same frames with the teams swapped and y mapped
+    through swapped."""
     X, y, w = [], [], []
     for p, tables in matches:
         codes = targets(p)
         in_play = np.flatnonzero(p.v1.labels != pm.X)
-        weights = semantics.possession_weights(codes, p.v1.halves, short_s) if short_s else None
+        frame_weights = weights(p) if weights else None
         for n, table in enumerate(tables):
             X.append(table[in_play[n % STRIDE::STRIDE]][:, columns])
             y.append(codes[in_play[n % STRIDE::STRIDE]])
-            if short_s:
-                w.append(weights[in_play[n % STRIDE::STRIDE]])
+            if weights:
+                w.append(frame_weights[in_play[n % STRIDE::STRIDE]])
     X, y = np.concatenate(X), np.concatenate(y)
-    w = np.concatenate(w) if short_s else None
+    w = np.concatenate(w) if weights else None
     if not swap:
         return X, y, w
     return (np.concatenate((X, X[:, features.swap_index(names)])), np.concatenate((y, swapped[y])),
@@ -241,7 +253,7 @@ def fit_first(prepared, names, variant):
                         if not name.startswith(variant.drop) and not unknown[i]])
     names = [names[i] for i in columns]
     X, y, w = _sample(matches, names, lambda p: p.targets[target], SWAP_LABELS, columns,
-                      variant.swap, variant.short_s)
+                      variant.swap, _weights(variant))
     model = {"names": names, "prior": [float(np.mean(y == s) if w is None
                                              else np.average(y == s, weights=w))
                                        for s in range(3)],
@@ -273,7 +285,7 @@ def fit_second(prepared, names, variant):
     added = features.second_stage(np.zeros((1, 0)), np.zeros((1, 3)), np.zeros((1, 4)))[1]
     X, y, w = _sample(matches, first.model["names"] + added,
                       lambda p: p.targets[variant.target], SWAP_LABELS, swap=variant.swap,
-                      short_s=variant.short_s)
+                      weights=_weights(variant))
     return HistGradientBoostingClassifier(**GBM).fit(X, y, sample_weight=w)
 
 
@@ -392,7 +404,7 @@ def export(prepared, names, variant, setting):
 if __name__ == "__main__":
     # python -m harness.train_v2 ["variant" ...]: only the named variants are cross-validated,
     # the rest of the report comes from the last full run's scores (fitting is deterministic,
-    # so the pairs still hold), and models/v2.json is left as it is.
+    # so the pairs still hold), and models/v2.json is written only if ACCEPTED is among them.
     only = sys.argv[1:]
     prepared = [prepare(match_id) for match_id in idsse.match_ids()]
     names = prepared[0][1]
@@ -406,7 +418,7 @@ if __name__ == "__main__":
     with open(path, "wb") as handle:  # for later comparisons
         pickle.dump(scores, handle)
     best = report(scores)
-    if not only:
+    if not only or ACCEPTED in only:
         export(prepared, names, VARIANTS[ACCEPTED], best[ACCEPTED])
         print("accepted %s -> wrote %s" % (_name(ACCEPTED, best[ACCEPTED]),
                                           os.path.relpath(MODEL_PATH, config.ROOT)))

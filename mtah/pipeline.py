@@ -25,7 +25,7 @@ import numpy as np
 from mtah import config, decoder, emissions, features, frames, refine, tagging, trees
 import games
 
-VERSION = "v2.2"
+VERSION = "v2.3"
 MODEL = os.path.join(config.ROOT, "models", "v2.json")
 LABELS = np.array(["H", "A", "D"])
 
