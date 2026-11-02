@@ -22,18 +22,15 @@ import os
 import numpy as np
 
 from harness import degrade, metrica, score, semantics, skillcorner, train_v1, train_v2
-from mtah import config, features, pipeline, trees
+from mtah import config, features, pipeline
 from evaluation import possession_metrics as pm
 
 V1_MODEL = os.path.join(config.ROOT, "models", "v1.json")
 
 
 def v2(match, model):
-    X, names = features.matrix(match.players, match.ball, match.slot_team, match.pitch)
-    X = X[:, [names.index(name) for name in model["names"]]]
-    probs = trees.probabilities(X, model)
-    change = trees.probabilities(X, model["detector"])
-    probs = trees.probabilities(features.second_stage(X, probs, change)[0], model["second"])
+    probs, change = pipeline.outputs(match.players, match.ball, match.slot_team, match.pitch,
+                                     model)
     return pipeline.decode_probs(probs, model, model["kappa"], change, model["gamma"])
 
 

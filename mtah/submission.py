@@ -1,7 +1,5 @@
 """Writing, validating and summarising a submission file. Validation is the official code."""
 
-import os
-
 import numpy as np
 
 from mtah import config, frames  # noqa: F401  (config puts the repository root on sys.path)
@@ -10,7 +8,6 @@ from evaluation import possession_metrics as pm
 
 def write_submission(path, labels):
     """frame,label CSV, one row per video frame, LF line endings -- the starter's exact format."""
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", newline="\n") as handle:
         handle.write("frame,label\n")
         handle.writelines("{},{}\n".format(frame, label) for frame, label in enumerate(labels))

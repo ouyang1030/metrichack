@@ -26,12 +26,10 @@ if __name__ == "__main__":
     target = calibrate.mean_statistics(matches, TRUE, seed=TARGET_SEED)
     params, reached = calibrate.fit(matches, target)
     fitted = calibrate.mean_statistics(matches, params)
-    for knob in sorted(set(calibrate.DROPOUT_KNOBS) | {"person_missing", "gap_mean_s",
-                                                       "jitter_m", "ball_false",
-                                                       "ball_jitter_m"}):
-        print("%-24s true %8.3f  fitted %8.3f  %s" % (
-            knob, getattr(TRUE, knob), getattr(params, knob),
-            "" if reached.get(knob, True) else "at a bound"))
+    for knob in sorted(reached):
+        print("%-24s true %8.3f  fitted %8.3f  %s" % (knob, getattr(TRUE, knob),
+                                                      getattr(params, knob),
+                                                      "" if reached[knob] else "at a bound"))
     for name in target:
         print("%-18s relative error %+.3f" % (name, fitted[name] / target[name] - 1))
     print("%.0f s" % (time.time() - start))

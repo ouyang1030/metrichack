@@ -84,6 +84,16 @@ def before_kickoff(events, n_frames=frames.N_FRAMES):
 TAGGING_WEIGHT = 0.0  # set by harness/fuse.py (EXPERIMENTS.md, 10-31)
 
 
+def outputs(players, ball, slot_team, pitch, model):
+    """(n, 3) P(H, A, D) after the second stage and the (n, 4) change probabilities."""
+    X, names = features.matrix(players, ball, slot_team, pitch)
+    X = X[:, [names.index(name) for name in model["names"]]]  # the columns the model was fitted on
+    probs = trees.probabilities(X, model)
+    change = trees.probabilities(X, model["detector"])
+    return (trees.probabilities(features.second_stage(X, probs, change)[0], model["second"]),
+            change)
+
+
 def predict(atd, events, sides, pitch=games.GAMES[games.GAME]["pitch"],
             tagging_weight=TAGGING_WEIGHT):
     """One label per frame from a cache.Atd, the Smart Tagging events and the map of their Team
@@ -91,15 +101,8 @@ def predict(atd, events, sides, pitch=games.GAMES[games.GAME]["pitch"],
     out."""
     with open(MODEL) as handle:
         model = json.load(handle)
-    X, names = features.matrix(atd.players, atd.ball, atd.slot_team, pitch)
-    X = X[:, [names.index(name) for name in model["names"]]]  # the columns the model was fitted on
-    probs = trees.probabilities(X, model)
-    change = trees.probabilities(X, model["detector"]) if "detector" in model else None
-    if "second" in model:
-        probs = trees.probabilities(features.second_stage(X, probs, change)[0], model["second"])
+    probs, change = outputs(atd.players, atd.ball, atd.slot_team, pitch, model)
     probs[before_kickoff(events, len(probs))] = DEAD
     vote = tagging.votes(tagging.phases(events, sides), len(probs))
     evidence = tagging_evidence(probs, vote, tagging_weight, frames.graded_mask(len(probs)))
-    gamma = model.get("gamma", 0.0)
-    return LABELS[decode_probs(probs, model, model["kappa"], change if gamma else None, gamma,
-                               evidence)]
+    return LABELS[decode_probs(probs, model, model["kappa"], change, model["gamma"], evidence)]
